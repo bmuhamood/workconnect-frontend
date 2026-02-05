@@ -18,64 +18,6 @@ export default function HomePage() {
         <div className="absolute -bottom-20 left-40 w-80 h-80 bg-green-100 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
       </div>
 
-      {/* Navigation Bar */}
-    <nav className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="flex items-center justify-between">
-        <Link href="/" className="flex items-center space-x-3">
-          <div className="relative">
-            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-lg">
-              <Briefcase className="h-6 w-6 text-white" />
-            </div>
-            <div className="absolute -top-1 -right-1 h-5 w-5 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
-              <Sparkles className="h-2.5 w-2.5 text-white" />
-            </div>
-          </div>
-          <div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              WorkConnect
-            </span>
-            <span className="ml-2 text-sm font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
-              UG
-            </span>
-          </div>
-        </Link>
-        
-        <div className="hidden md:flex items-center space-x-6">
-          <Link href="/workers" className="text-gray-700 hover:text-blue-600 font-medium transition-colors">
-            Find Workers
-          </Link>
-          <Link href="/register?type=worker" className="text-gray-700 hover:text-blue-600 font-medium transition-colors">
-            For Workers
-          </Link>
-          <Link href="/register?type=employer" className="text-gray-700 hover:text-blue-600 font-medium transition-colors">
-            For Employers
-          </Link>
-          <Link href="/about" className="text-gray-700 hover:text-blue-600 font-medium transition-colors">
-            About
-          </Link>
-          <div className="h-6 w-px bg-gray-300"></div>
-          <Link href="/login">
-            <Button variant="ghost" className="font-medium">
-              Sign In
-            </Button>
-          </Link>
-          <Link href="/register">
-            <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all">
-              Get Started
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-        
-        {/* Mobile Menu Button */}
-        <Button variant="ghost" size="icon" className="md:hidden">
-          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </Button>
-      </div>
-    </nav>
-
       {/* Hero Section */}
       <section className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-24">
         <div className="text-center max-w-6xl mx-auto">
@@ -414,9 +356,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-<Footer />
     </div>
   );
 }

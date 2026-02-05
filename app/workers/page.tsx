@@ -10,7 +10,8 @@ import {
   Search, Filter, MapPin, Star, Clock, Shield, 
   Users, Briefcase, Award, Sparkles, ChevronRight,
   CheckCircle, XCircle, Eye, MessageSquare, Phone,
-  Loader2, X, TrendingUp, ChevronDown, ChevronUp
+  Loader2, X, TrendingUp, ChevronDown, ChevronUp,
+  Grid, List, Navigation // Added new icons
 } from 'lucide-react';
 import api from '@/lib/api';
 import ContactModal from '@/components/ContactModal';
@@ -20,6 +21,8 @@ import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import Navbar from '@/components/layout/navbar';
 import Footer from '@/components/ui/footer';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Added Tabs
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
 
 interface FilterState {
   city: string;
@@ -51,6 +54,8 @@ export default function WorkersPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [activeFilterCount, setActiveFilterCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid'); // Added view mode
+  const [sortBy, setSortBy] = useState<string>('rating'); // Added sort option
 
   const [filters, setFilters] = useState<FilterState>({
     city: '',
@@ -95,6 +100,27 @@ export default function WorkersPage() {
 
     return () => clearTimeout(timer);
   }, [filters.search]);
+
+  // Sort workers when sortBy changes
+  useEffect(() => {
+    if (workers.length > 0) {
+      const sorted = [...workers].sort((a, b) => {
+        switch (sortBy) {
+          case 'rating':
+            return parseFloat(b.rating_average || '0') - parseFloat(a.rating_average || '0');
+          case 'experience':
+            return (b.experience_years || 0) - (a.experience_years || 0);
+          case 'name':
+            return (a.full_name || '').localeCompare(b.full_name || '');
+          case 'location':
+            return (a.city || '').localeCompare(b.city || '');
+          default:
+            return 0;
+        }
+      });
+      setFilteredWorkers(sorted);
+    }
+  }, [sortBy, workers]);
 
   const fetchWorkers = useCallback(async (customFilters?: Partial<FilterState>) => {
     try {
@@ -421,7 +447,7 @@ export default function WorkersPage() {
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Filters Sidebar - Fixed for better visibility */}
           <div className={`lg:w-80 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-            <div className="space-y-6">
+            <div className="space-y-6 sticky top-8">
               <Card className="border-2 border-blue-100 shadow-lg">
                 <CardHeader className="bg-gradient-to-r from-blue-50 to-white border-b border-blue-100">
                   <div className="flex items-center justify-between">
@@ -665,11 +691,23 @@ export default function WorkersPage() {
           <div className="flex-1">
             <Card className="mb-8 border-2 border-blue-100 shadow-lg">
               <CardContent className="p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
                   <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      Available Workers
-                    </h2>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        Available Workers
+                      </h2>
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="bg-white border-blue-200 text-blue-700 px-3 py-1">
+                          <Navigation className="h-3 w-3 mr-1" />
+                          Positions: {totalCount}
+                        </Badge>
+                        <Badge variant="outline" className="bg-green-50 border-green-200 text-green-700 px-3 py-1">
+                          <MapPin className="h-3 w-3 mr-1" />
+                          Locations: {Array.from(new Set(workers.map(w => w.city))).length}
+                        </Badge>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-3 mt-2">
                       <p className="text-gray-600">
                         Showing <span className="font-bold text-blue-600">{filteredWorkers.length}</span> of <span className="font-bold text-blue-600">{totalCount}</span> workers
@@ -682,33 +720,71 @@ export default function WorkersPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      onClick={() => fetchWorkers()}
-                      disabled={isRefreshing}
-                      className="gap-2 hover:bg-blue-50 hover:text-blue-600"
-                    >
-                      {isRefreshing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Loader2 className="h-4 w-4" />
-                      )}
-                      Refresh
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => setShowFilters(!showFilters)}
-                      className="lg:hidden gap-2 bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200"
-                    >
-                      <Filter className="h-4 w-4" />
-                      {showFilters ? 'Hide' : 'Filters'}
-                      {activeFilterCount > 0 && (
-                        <span className="bg-blue-600 text-white text-xs h-5 w-5 rounded-full flex items-center justify-center">
-                          {activeFilterCount}
-                        </span>
-                      )}
-                    </Button>
+                  
+                  {/* Controls Section */}
+                  <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+                    {/* View Toggle */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600 mr-2">View:</span>
+                      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'grid' | 'list')}>
+                        <TabsList className="bg-gray-100 p-1">
+                          <TabsTrigger value="grid" className="flex items-center gap-2 px-3 py-1">
+                            <Grid className="h-4 w-4" />
+                            <span className="hidden sm:inline">Grid</span>
+                          </TabsTrigger>
+                          <TabsTrigger value="list" className="flex items-center gap-2 px-3 py-1">
+                            <List className="h-4 w-4" />
+                            <span className="hidden sm:inline">List</span>
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </div>
+                    
+                    {/* Sort Dropdown */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600 mr-2">Sort by:</span>
+                      <Select value={sortBy} onValueChange={setSortBy}>
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="rating">Rating (High to Low)</SelectItem>
+                          <SelectItem value="experience">Experience</SelectItem>
+                          <SelectItem value="name">Name (A-Z)</SelectItem>
+                          <SelectItem value="location">Location</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => fetchWorkers()}
+                        disabled={isRefreshing}
+                        className="gap-2 hover:bg-blue-50 hover:text-blue-600"
+                      >
+                        {isRefreshing ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Loader2 className="h-4 w-4" />
+                        )}
+                        Refresh
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => setShowFilters(!showFilters)}
+                        className="lg:hidden gap-2 bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200"
+                      >
+                        <Filter className="h-4 w-4" />
+                        {showFilters ? 'Hide' : 'Filters'}
+                        {activeFilterCount > 0 && (
+                          <span className="bg-blue-600 text-white text-xs h-5 w-5 rounded-full flex items-center justify-center">
+                            {activeFilterCount}
+                          </span>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -750,11 +826,20 @@ export default function WorkersPage() {
               </Card>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {filteredWorkers.map((worker) => (
-                    <WorkerCard key={worker.id} worker={worker} />
-                  ))}
-                </div>
+                {/* Workers Display based on View Mode */}
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {filteredWorkers.map((worker) => (
+                      <WorkerCard key={worker.id} worker={worker} viewMode={viewMode} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {filteredWorkers.map((worker) => (
+                      <WorkerCard key={worker.id} worker={worker} viewMode={viewMode} />
+                    ))}
+                  </div>
+                )}
                 
                 {/* Load More Button if needed */}
                 {filteredWorkers.length < totalCount && (
@@ -793,8 +878,8 @@ export default function WorkersPage() {
   );
 }
 
-// Updated Worker Card Component with better layout
-function WorkerCard({ worker }: { worker: WorkerProfile }) {
+// Updated Worker Card Component with responsive view modes
+function WorkerCard({ worker, viewMode = 'grid' }: { worker: WorkerProfile, viewMode?: 'grid' | 'list' }) {
   const router = useRouter();
   const [showContactModal, setShowContactModal] = useState(false);
 
@@ -826,20 +911,20 @@ function WorkerCard({ worker }: { worker: WorkerProfile }) {
     switch (status?.toLowerCase()) {
       case 'verified':
         return (
-          <div className="absolute -top-2 -right-2 h-10 w-10 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-            <Shield className="h-4 w-4 text-white" />
+          <div className={`${viewMode === 'list' ? 'h-8 w-8' : 'h-10 w-10'} bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white`}>
+            <Shield className={`${viewMode === 'list' ? 'h-3 w-3' : 'h-4 w-4'} text-white`} />
           </div>
         );
       case 'pending':
         return (
-          <div className="absolute -top-2 -right-2 h-10 w-10 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-            <Clock className="h-4 w-4 text-white" />
+          <div className={`${viewMode === 'list' ? 'h-8 w-8' : 'h-10 w-10'} bg-gradient-to-br from-yellow-400 to-amber-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white`}>
+            <Clock className={`${viewMode === 'list' ? 'h-3 w-3' : 'h-4 w-4'} text-white`} />
           </div>
         );
       case 'rejected':
         return (
-          <div className="absolute -top-2 -right-2 h-10 w-10 bg-gradient-to-br from-red-400 to-red-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-            <XCircle className="h-4 w-4 text-white" />
+          <div className={`${viewMode === 'list' ? 'h-8 w-8' : 'h-10 w-10'} bg-gradient-to-br from-red-400 to-red-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white`}>
+            <XCircle className={`${viewMode === 'list' ? 'h-3 w-3' : 'h-4 w-4'} text-white`} />
           </div>
         );
       default:
@@ -847,6 +932,162 @@ function WorkerCard({ worker }: { worker: WorkerProfile }) {
     }
   };
 
+  if (viewMode === 'list') {
+    return (
+      <>
+        <Card className="group hover:shadow-xl transition-all duration-300 border-2 border-gray-200 hover:border-blue-300">
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row gap-6">
+              {/* Left Section - Profile */}
+              <div className="flex items-start gap-4 md:w-1/3">
+                <div className="relative">
+                  <div className="h-20 w-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-2xl shadow-lg">
+                    {worker.first_name?.[0] || 'W'}{worker.last_name?.[0] || 'D'}
+                  </div>
+                  {getVerificationStatus(worker.verification_status)}
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="mb-2">
+                    <h3 
+                      className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors truncate cursor-pointer hover:underline"
+                      onClick={() => router.push(`/workers/${worker.id}`)}
+                    >
+                      {worker.full_name}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Briefcase className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                      <span className="text-lg font-semibold text-gray-700 truncate">
+                        {worker.profession || 'Worker'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Rating */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <Star className="h-4 w-4 text-amber-400 fill-current" />
+                      <span className="font-bold text-gray-900">
+                        {worker.rating_average || '0.0'}
+                      </span>
+                    </div>
+                    <span className="text-gray-500 text-sm">
+                      ({worker.total_reviews || 0} reviews)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Middle Section - Details */}
+              <div className="md:w-1/3 space-y-3">
+                {/* Location */}
+                {worker.city && (
+                  <div className="flex items-center text-gray-600">
+                    <MapPin className="h-4 w-4 mr-2 flex-shrink-0 text-blue-500" />
+                    <span className="font-medium">
+                      {worker.city}{worker.district ? `, ${worker.district}` : ', Uganda'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Experience */}
+                {worker.experience_years > 0 && (
+                  <div className="flex items-center text-gray-600">
+                    <Award className="h-4 w-4 mr-2 flex-shrink-0 text-amber-500" />
+                    <span className="font-medium">{worker.experience_years} years experience</span>
+                  </div>
+                )}
+
+                {/* Availability */}
+                <div className="flex items-center">
+                  <Clock className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getAvailabilityColor(worker.availability)}`}>
+                    {getAvailabilityText(worker.availability)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Right Section - Skills & Actions */}
+              <div className="md:w-1/3 flex flex-col justify-between">
+                {/* Skills */}
+                {worker.skills && worker.skills.length > 0 && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="h-4 w-4 text-blue-500" />
+                      <span className="text-sm font-medium text-gray-700">Key Skills</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {worker.skills.slice(0, 4).map((skill, index) => (
+                        <span
+                          key={skill.id || index}
+                          className="px-3 py-1 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 text-xs rounded-lg border border-blue-200"
+                        >
+                          {skill.skill_name}
+                        </span>
+                      ))}
+                      {worker.skills.length > 4 && (
+                        <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded-lg">
+                          +{worker.skills.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
+                    onClick={() => router.push(`/workers/${worker.id}`)}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    View
+                  </Button>
+                  
+                  <Button
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                    onClick={() => setShowContactModal(true)}
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Contact
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Contact Modal */}
+        {showContactModal && (
+          <ContactModal 
+            worker={{
+              id: worker.id,
+              first_name: worker.first_name,
+              last_name: worker.last_name,
+              full_name: worker.full_name,
+              profession: worker.profession || 'Worker',
+              hourly_rate: worker.hourly_rate || '0',
+              availability: worker.availability,
+              verification_status: worker.verification_status,
+              rating_average: worker.rating_average,
+              city: worker.city,
+              district: worker.district,
+              experience_years: worker.experience_years,
+              total_reviews: worker.total_reviews,
+              profile_photo_url: worker.profile_photo_url,
+              email: worker.email,
+              phone: worker.phone,
+              skills: worker.skills?.map(skill => skill.skill_name) || []
+            }}
+            onClose={() => setShowContactModal(false)}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Grid View (original card design)
   return (
     <>
       <Card className="group hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-gray-200 hover:border-blue-300 hover:scale-[1.02] h-full flex flex-col">
@@ -872,8 +1113,8 @@ function WorkerCard({ worker }: { worker: WorkerProfile }) {
                     {worker.full_name}
                   </h3>
                   <div className="flex items-center gap-2 mt-1">
-                    <Briefcase className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                    <span className="text-gray-700 font-medium truncate">
+                    <Briefcase className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                    <span className="text-gray-700 font-semibold truncate">
                       {worker.profession || 'Worker'}
                     </span>
                   </div>
@@ -893,26 +1134,26 @@ function WorkerCard({ worker }: { worker: WorkerProfile }) {
 
           {/* Worker Details */}
           <div className="space-y-3 mb-4 flex-1">
-            {/* Location */}
+            {/* Location with Map Pin */}
             {worker.city && (
-              <div className="flex items-center text-gray-600">
+              <div className="flex items-center text-gray-600 bg-blue-50/50 p-2 rounded-lg">
                 <MapPin className="h-4 w-4 mr-2 flex-shrink-0 text-blue-500" />
-                <span className="truncate text-sm">
+                <span className="truncate text-sm font-medium">
                   {worker.city}{worker.district ? `, ${worker.district}` : ', Uganda'}
                 </span>
               </div>
             )}
 
-            {/* Experience */}
+            {/* Experience Badge */}
             {worker.experience_years > 0 && (
-              <div className="flex items-center text-gray-600">
+              <div className="flex items-center text-gray-600 bg-amber-50/50 p-2 rounded-lg">
                 <Award className="h-4 w-4 mr-2 flex-shrink-0 text-amber-500" />
-                <span className="text-sm">{worker.experience_years} years experience</span>
+                <span className="text-sm font-medium">{worker.experience_years} years experience</span>
               </div>
             )}
 
             {/* Availability */}
-            <div className="flex items-center">
+            <div className="flex items-center bg-gray-50/50 p-2 rounded-lg">
               <Clock className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
               <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getAvailabilityColor(worker.availability)}`}>
                 {getAvailabilityText(worker.availability)}
