@@ -1,26 +1,132 @@
+/* app/globals.css */
 @import "tailwindcss";
 
+@theme {
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.129 0.042 264.695);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.129 0.042 264.695);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.129 0.042 264.695);
+  --color-primary: oklch(0.576 0.245 262.881);
+  --color-primary-foreground: oklch(0.985 0.002 247.858);
+  --color-secondary: oklch(0.968 0.007 247.896);
+  --color-secondary-foreground: oklch(0.21 0.034 264.665);
+  --color-muted: oklch(0.968 0.007 247.896);
+  --color-muted-foreground: oklch(0.554 0.046 257.417);
+  --color-accent: oklch(0.968 0.007 247.896);
+  --color-accent-foreground: oklch(0.21 0.034 264.665);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(0.577 0.245 27.325);
+  --color-border: oklch(0.929 0.013 255.508);
+  --color-input: oklch(0.929 0.013 255.508);
+  --color-ring: oklch(0.576 0.245 262.881);
+  --radius: 0.5rem;
+  
+  /* Dark mode variables - use a different naming convention */
+  --color-dark-background: oklch(0.129 0.042 264.695);
+  --color-dark-foreground: oklch(0.985 0.002 247.858);
+  --color-dark-card: oklch(0.129 0.042 264.695);
+  --color-dark-card-foreground: oklch(0.985 0.002 247.858);
+  --color-dark-popover: oklch(0.129 0.042 264.695);
+  --color-dark-popover-foreground: oklch(0.985 0.002 247.858);
+  --color-dark-primary: oklch(0.698 0.17 254.624);
+  --color-dark-primary-foreground: oklch(0.21 0.034 264.665);
+  --color-dark-secondary: oklch(0.279 0.041 260.031);
+  --color-dark-secondary-foreground: oklch(0.985 0.002 247.858);
+  --color-dark-muted: oklch(0.279 0.041 260.031);
+  --color-dark-muted-foreground: oklch(0.707 0.038 261.325);
+  --color-dark-accent: oklch(0.279 0.041 260.031);
+  --color-dark-accent-foreground: oklch(0.985 0.002 247.858);
+  --color-dark-destructive: oklch(0.704 0.191 22.216);
+  --color-dark-destructive-foreground: oklch(0.704 0.191 22.216);
+  --color-dark-border: oklch(0.279 0.041 260.031);
+  --color-dark-input: oklch(0.279 0.041 260.031);
+  --color-dark-ring: oklch(0.551 0.027 264.364);
+}
+
+/* Define CSS custom properties for light/dark mode */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: var(--color-background);
+  --foreground: var(--color-foreground);
+  --card: var(--color-card);
+  --card-foreground: var(--color-card-foreground);
+  --popover: var(--color-popover);
+  --popover-foreground: var(--color-popover-foreground);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-primary-foreground);
+  --secondary: var(--color-secondary);
+  --secondary-foreground: var(--color-secondary-foreground);
+  --muted: var(--color-muted);
+  --muted-foreground: var(--color-muted-foreground);
+  --accent: var(--color-accent);
+  --accent-foreground: var(--color-accent-foreground);
+  --destructive: var(--color-destructive);
+  --destructive-foreground: var(--color-destructive-foreground);
+  --border: var(--color-border);
+  --input: var(--color-input);
+  --ring: var(--color-ring);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark {
+  --background: var(--color-dark-background);
+  --foreground: var(--color-dark-foreground);
+  --card: var(--color-dark-card);
+  --card-foreground: var(--color-dark-card-foreground);
+  --popover: var(--color-dark-popover);
+  --popover-foreground: var(--color-dark-popover-foreground);
+  --primary: var(--color-dark-primary);
+  --primary-foreground: var(--color-dark-primary-foreground);
+  --secondary: var(--color-dark-secondary);
+  --secondary-foreground: var(--color-dark-secondary-foreground);
+  --muted: var(--color-dark-muted);
+  --muted-foreground: var(--color-dark-muted-foreground);
+  --accent: var(--color-dark-accent);
+  --accent-foreground: var(--color-dark-accent-foreground);
+  --destructive: var(--color-dark-destructive);
+  --destructive-foreground: var(--color-dark-destructive-foreground);
+  --border: var(--color-dark-border);
+  --input: var(--color-dark-input);
+  --ring: var(--color-dark-ring);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out;
+  }
+  
+  .animate-slide-up {
+    animation: slide-up 0.3s ease-out;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
