@@ -7,10 +7,13 @@ import {
   FileText, Scale, AlertTriangle, Shield, Briefcase,
   CheckCircle, XCircle, Sparkles, ArrowLeft
 } from 'lucide-react';
+import Footer from '@/components/ui/footer';
+import Navbar from '@/components/layout/navbar';
 
 export default function TermsOfServicePage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-amber-50/20 to-orange-50/20">
+      
       {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-amber-100 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
@@ -210,6 +213,6 @@ export default function TermsOfServicePage() {
           </div>
         </div>
       </div>
-    </div>
+       </div>
   );
 }

@@ -8,7 +8,7 @@ type UserRole = 'worker' | 'employer' | 'admin' | 'super_admin';
 // Define role permissions
 const ROLE_PERMISSIONS = {
   worker: ['/dashboard', '/profile', '/settings', '/documents', '/contracts', '/payments'],
-  employer: ['/dashboard', '/profile', '/settings', '/contracts', '/payments', '/workers', '/jobs'],
+  employer: ['/dashboard', '/profile', '/settings', '/contracts', '/payments', '/jobs'],
   admin: ['/dashboard', '/admin', '/analytics', '/users', '/verifications', '/reports'],
   super_admin: ['*'] // Access to everything
 };

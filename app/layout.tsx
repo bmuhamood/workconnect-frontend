@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import ClientLayout from '@/components/ClientLayout';
+import Navbar from '@/components/layout/navbar';
+import Footer from '@/components/ui/footer';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -17,10 +19,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="scroll-smooth">
       <body className={inter.className}>
         <ClientLayout>
-          {children}
+          <div className="flex flex-col min-h-screen">
+            <Navbar />
+            <main className="flex-1 pt-16 md:pt-20"> {/* Add padding for fixed navbar */}
+              {children}
+            </main>
+            <Footer />
+          </div>
         </ClientLayout>
       </body>
     </html>

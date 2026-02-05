@@ -27,6 +27,14 @@ interface ContactWorker {
   rating_average?: string;
   city?: string;
   experience_years?: number;
+  hourly_rate?: string;
+  availability?: string;
+  district?: string;
+  total_reviews?: number;
+  profile_photo_url?: string;
+  email?: string;
+  phone?: string;
+  skills?: string[];
 }
 
 interface ContactModalProps {

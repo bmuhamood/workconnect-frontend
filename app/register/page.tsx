@@ -12,6 +12,7 @@ import {
   Building2, UserCheck, TrendingUp, DollarSign,
   Clock, MapPin, HeartHandshake
 } from 'lucide-react';
+import Navbar from '@/components/layout/navbar';
 
 export default function RegisterTypePage() {
   const router = useRouter();

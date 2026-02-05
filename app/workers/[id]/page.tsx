@@ -1,253 +1,123 @@
-// app/workers/page.tsx
+// app/workers/[id]/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { 
-  Search, Filter, MapPin, Star, Clock, Shield, 
-  Users, Briefcase, Award, Sparkles, ChevronRight,
-  CheckCircle, XCircle, Eye, MessageSquare, Phone,
-  Loader2, X
+  MapPin, Star, Clock, Shield, Briefcase, Award, 
+  Phone, Mail, Calendar, Users, BookOpen, Languages,
+  ArrowLeft, MessageSquare, CheckCircle, XCircle, Loader2,
+  GraduationCap, Target, TrendingUp, UserCheck, FileText, Zap,
+  ChevronRight, Trophy, BarChart3, Sparkles
 } from 'lucide-react';
 import api from '@/lib/api';
 import ContactModal from '@/components/ContactModal';
 import { WorkerProfile, WorkerSkill } from '@/types/worker';
-import { Badge } from '@/components/ui/badge';
+import { cn, formatDate } from '@/lib/utils';
+import Footer from '@/components/ui/footer';
+import Navbar from '@/components/layout/navbar';
 
-interface FilterState {
-  city: string;
-  profession: string;
-  minExperience: number;
-  availability: string;
-  verification: string;
-  search: string;
-}
-
-interface ApiParams {
-  city?: string;
-  profession?: string;
-  min_experience?: number;
-  availability?: string;
-  verification_status?: string;
-  search?: string;
-  page?: number;
-  page_size?: number;
-}
-
-export default function WorkersPage() {
+export default function WorkerDetailPage() {
+  const params = useParams();
   const router = useRouter();
-  const [workers, setWorkers] = useState<WorkerProfile[]>([]);
-  const [filteredWorkers, setFilteredWorkers] = useState<WorkerProfile[]>([]);
+  const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
-  const [showFilters, setShowFilters] = useState(false);
-  const [activeFilterCount, setActiveFilterCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [showContactModal, setShowContactModal] = useState(false);
 
-  const [filters, setFilters] = useState<FilterState>({
-    city: '',
-    profession: '',
-    minExperience: 0,
-    availability: '',
-    verification: 'all',
-    search: '',
-  });
+  const workerId = params.id as string;
 
-  // Calculate active filter count
   useEffect(() => {
-    let count = 0;
-    if (filters.city) count++;
-    if (filters.profession) count++;
-    if (filters.minExperience > 0) count++;
-    if (filters.availability && filters.availability !== 'all') count++;
-    if (filters.verification && filters.verification !== 'all') count++;
-    if (filters.search) count++;
-    setActiveFilterCount(count);
-  }, [filters]);
+    if (workerId) {
+      fetchWorkerDetails();
+    }
+  }, [workerId]);
 
-  // Fetch workers on initial load
-  useEffect(() => {
-    fetchWorkers();
-  }, []);
-
-  // Debounced filter updates
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchWorkers({ ...filters });
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [filters.city, filters.profession, filters.minExperience, filters.availability, filters.verification]);
-
-  // Handle search separately with debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (filters.search.trim()) {
-        fetchWorkers({ ...filters });
-      } else if (filters.search === '') {
-        fetchWorkers({ ...filters, search: '' });
-      }
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [filters.search]);
-
-  const fetchWorkers = useCallback(async (customFilters?: Partial<FilterState>) => {
+  const fetchWorkerDetails = async () => {
     try {
       setIsLoading(true);
+      setError(null);
+      
+      // Use the correct endpoint from your Swagger docs
+      const response = await api.get(`/workers/profile/${workerId}/`);
 
-      const activeFilters = customFilters || filters;
-
-      const params: ApiParams = {
-        page_size: 20,
+      const workerData = response.data;
+      
+      // Debug: Log the worker data to see its structure
+      console.log('Worker Data:', workerData);
+      
+      // Transform data from API to match your TypeScript interface
+      const transformedWorker: WorkerProfile = {
+        id: workerData.id,
+        first_name: workerData.first_name || '',
+        last_name: workerData.last_name || '',
+        full_name: workerData.full_name || `${workerData.first_name || ''} ${workerData.last_name || ''}`.trim(),
+        date_of_birth: workerData.date_of_birth,
+        age: workerData.age?.toString(),
+        gender: workerData.gender as any,
+        national_id: workerData.national_id,
+        profile_photo_url: workerData.profile_photo_url || '',
+        bio: workerData.bio,
+        city: workerData.city || 'Kampala',
+        district: workerData.district || '',
+        location_lat: workerData.location_lat?.toString(),
+        location_lng: workerData.location_lng?.toString(),
+        experience_years: workerData.experience_years || 0,
+        education_level: workerData.education_level,
+        languages: workerData.languages || {},
+        email: workerData.user?.email || workerData.email || '',
+        profession: workerData.profession || 'Worker',
+        hourly_rate: workerData.hourly_rate?.toString() || '0',
+        additional_skills: workerData.additional_skills || '',
+        phone: workerData.user?.phone || workerData.phone || '',
+        availability: workerData.availability || 'available',
+        expected_salary_min: workerData.expected_salary_min,
+        expected_salary_max: workerData.expected_salary_max,
+        verification_status: workerData.verification_status || 'pending',
+        trust_score: workerData.trust_score || 0,
+        rating_average: workerData.rating_average?.toString() || '0.0',
+        total_reviews: workerData.total_reviews || 0,
+        total_placements: workerData.total_placements || 0,
+        subscription_tier: workerData.subscription_tier || 'free',
+        subscription_expires_at: workerData.subscription_expires_at,
+        created_at: workerData.created_at,
+        updated_at: workerData.updated_at,
+        skills: (workerData.skills || []).map((skill: any) => ({
+          id: skill.id,
+          category: skill.category?.name || skill.category_name || 'General',
+          category_name: skill.category?.name || skill.category_name || 'General',
+          skill_name: skill.skill_name || skill.name || 'Skill',
+          proficiency_level: skill.proficiency_level || skill.level || 'beginner',
+          years_of_experience: skill.years_of_experience || skill.experience_years || 0,
+          is_primary: skill.is_primary || false,
+          created_at: skill.created_at,
+        })),
+        documents: workerData.documents || [],
+        references: workerData.references || [],
       };
 
-      // Add filters if they have values
-      if (activeFilters.city) params.city = activeFilters.city;
-      if (activeFilters.profession) params.profession = activeFilters.profession;
-      
-      if (activeFilters.minExperience !== undefined && activeFilters.minExperience > 0) {
-        params.min_experience = activeFilters.minExperience;
-      }
-      
-      if (activeFilters.availability && activeFilters.availability !== 'all') {
-        params.availability = activeFilters.availability;
-      }
-      if (activeFilters.verification && activeFilters.verification !== 'all') {
-        params.verification_status = activeFilters.verification;
-      }
-      if (activeFilters.search) params.search = activeFilters.search;
-
-      // Try different endpoints based on your backend setup
-      let response;
-      try {
-        response = await api.get('/api/users/workers/', { params });
-      } catch (error) {
-        console.log('Public endpoint failed, trying admin endpoint...');
-        response = await api.get('/admin/workers/', { params });
-      }
-
-      // Handle different response formats
-      let workersData: WorkerProfile[] = [];
-      let count = 0;
-
-      if (response.data.results) {
-        workersData = response.data.results;
-        count = response.data.count || response.data.results.length;
-      } else if (Array.isArray(response.data)) {
-        workersData = response.data;
-        count = response.data.length;
-      } else {
-        workersData = [response.data];
-        count = 1;
-      }
-
-      // Transform data
-      const transformedWorkers = workersData.map((worker: any) => {
-        const user = worker.user || {};
-        
-        return {
-          id: worker.id || `temp-${Math.random()}`,
-          first_name: worker.first_name || user.first_name || '',
-          last_name: worker.last_name || user.last_name || '',
-          full_name: worker.full_name || `${worker.first_name || ''} ${worker.last_name || ''}`.trim() || 'Unknown Worker',
-          city: worker.city || 'Kampala',
-          district: worker.district || '',
-          experience_years: worker.experience_years || 0,
-          profession: worker.profession || 'Worker',
-          rating_average: worker.rating_average?.toString() || '0.0',
-          total_reviews: worker.total_reviews || 0,
-          verification_status: worker.verification_status || 'pending',
-          trust_score: worker.trust_score || 0,
-          availability: worker.availability || 'available',
-          hourly_rate: worker.hourly_rate?.toString() || '0',
-          profile_photo_url: worker.profile_photo_url || '',
-          email: user.email || worker.email,
-          phone: user.phone || worker.phone,
-          skills: (worker.skills || []).map((skill: any) => ({
-            id: skill.id || `skill-${Math.random()}`,
-            skill_name: skill.skill_name || 'Skill',
-            proficiency_level: (skill.proficiency_level || 'beginner') as WorkerSkill['proficiency_level'],
-            category: skill.category?.name || skill.category_name || 'General',
-            category_name: skill.category?.name || skill.category_name || 'General',
-            years_of_experience: skill.years_of_experience || 0,
-            is_primary: skill.is_primary || false,
-            created_at: skill.created_at || new Date().toISOString(),
-          })),
-          additional_skills: worker.additional_skills || '',
-          gender: worker.gender as any,
-          bio: worker.bio,
-          date_of_birth: worker.date_of_birth,
-          age: worker.age?.toString(),
-          national_id: worker.national_id,
-          education_level: worker.education_level,
-          languages: worker.languages || {},
-          expected_salary_min: worker.expected_salary_min,
-          expected_salary_max: worker.expected_salary_max,
-          total_placements: worker.total_placements || 0,
-          subscription_tier: (worker.subscription_tier || 'free') as any,
-          subscription_expires_at: worker.subscription_expires_at,
-          created_at: worker.created_at || new Date().toISOString(),
-          updated_at: worker.updated_at || new Date().toISOString(),
-          documents: worker.documents || [],
-          references: worker.references || [],
-        };
-      });
-
-      setWorkers(transformedWorkers);
-      setFilteredWorkers(transformedWorkers);
-      setTotalCount(count);
-
+      setWorker(transformedWorker);
     } catch (error: any) {
-      console.error('Error fetching workers:', error);
-      
-      // Mock data for development
-      const mockWorkers = generateMockWorkers();
-      setWorkers(mockWorkers);
-      setFilteredWorkers(mockWorkers);
-      setTotalCount(mockWorkers.length);
+      console.error('Error fetching worker details:', error);
+      setError(error.response?.data?.detail || error.message || 'Failed to load worker details');
+      setWorker(null);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
-  }, [filters]);
-
-  const handleFilterChange = (key: keyof FilterState, value: any) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      city: '',
-      profession: '',
-      minExperience: 0,
-      availability: '',
-      verification: 'all',
-      search: '',
-    });
-  };
-
-  const clearSingleFilter = (key: keyof FilterState) => {
-    setFilters(prev => ({ 
-      ...prev, 
-      [key]: key === 'verification' ? 'all' : 
-              key === 'availability' ? '' : 
-              key === 'minExperience' ? 0 : '' 
-    }));
   };
 
   const getAvailabilityColor = (availability: string) => {
     switch (availability?.toLowerCase()) {
-      case 'full_time': return 'bg-green-100 text-green-800 border-green-200';
-      case 'part_time': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'available': return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'busy': return 'bg-red-100 text-red-800 border-red-200';
-      case 'on_leave': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'not_available': return 'bg-gray-100 text-gray-800 border-gray-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'full_time': return 'bg-gradient-to-r from-green-500 to-emerald-600 text-white';
+      case 'part_time': return 'bg-gradient-to-r from-blue-500 to-cyan-600 text-white';
+      case 'available': return 'bg-gradient-to-r from-purple-500 to-pink-600 text-white';
+      case 'busy': return 'bg-gradient-to-r from-red-500 to-orange-600 text-white';
+      case 'on_leave': return 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white';
+      default: return 'bg-gradient-to-r from-gray-500 to-gray-600 text-white';
     }
   };
 
@@ -255,644 +125,666 @@ export default function WorkersPage() {
     switch (availability?.toLowerCase()) {
       case 'full_time': return 'Full Time';
       case 'part_time': return 'Part Time';
-      case 'available': return 'Available';
-      case 'busy': return 'Busy';
+      case 'available': return 'Available Now';
+      case 'busy': return 'Currently Busy';
       case 'on_leave': return 'On Leave';
-      case 'not_available': return 'Not Available';
       default: return availability || 'Not Specified';
     }
   };
 
-  // Mock data generator for development
-  const generateMockWorkers = (): WorkerProfile[] => {
-    const cities = ['Kampala', 'Entebbe', 'Jinja', 'Mbarara', 'Gulu', 'Lira', 'Mbale'];
-    const professions = ['Housekeeper', 'Nanny', 'Cook', 'Gardener', 'Driver', 'Security Guard'];
-    const skills = [
-      { skill_name: 'Cooking', proficiency_level: 'advanced' as const },
-      { skill_name: 'Cleaning', proficiency_level: 'expert' as const },
-      { skill_name: 'Child Care', proficiency_level: 'intermediate' as const },
-      { skill_name: 'Driving', proficiency_level: 'expert' as const },
-    ];
-
-    return Array.from({ length: 12 }, (_, i) => ({
-      id: `mock-worker-${i}`,
-      first_name: `Worker${i + 1}`,
-      last_name: 'Demo',
-      full_name: `Worker${i + 1} Demo`,
-      city: cities[i % cities.length],
-      district: ['Central', 'North', 'South', 'East'][i % 4],
-      experience_years: Math.floor(Math.random() * 20),
-      profession: professions[i % professions.length],
-      rating_average: (Math.random() * 2 + 3).toFixed(1),
-      total_reviews: Math.floor(Math.random() * 50),
-      verification_status: i % 3 === 0 ? 'verified' : i % 3 === 1 ? 'pending' : 'rejected',
-      trust_score: Math.floor(Math.random() * 30 + 70),
-      availability: ['available', 'full_time', 'part_time', 'busy'][i % 4] as any,
-      hourly_rate: (Math.random() * 20 + 5).toFixed(2),
-      profile_photo_url: '',
-      email: `worker${i + 1}@example.com`,
-      phone: `+2567${Math.floor(10000000 + Math.random() * 90000000)}`,
-      additional_skills: 'Communication, Organization, First Aid',
-      gender: i % 2 === 0 ? 'male' : 'female',
-      bio: 'Experienced professional with proven track record.',
-      date_of_birth: '1990-01-01',
-      age: '34',
-      national_id: `CM${Math.floor(1000000 + Math.random() * 9000000)}`,
-      education_level: ['Primary', 'Secondary', 'Diploma'][i % 3],
-      languages: { English: 'fluent', Luganda: 'basic' },
-      expected_salary_min: 300000,
-      expected_salary_max: 600000,
-      total_placements: Math.floor(Math.random() * 10),
-      subscription_tier: i % 3 === 0 ? 'premium' : i % 3 === 1 ? 'enterprise' : 'free',
-      subscription_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      skills: skills.slice(0, Math.floor(Math.random() * 3) + 1).map((skill, idx) => ({
-        id: `skill-${i}-${idx}`,
-        skill_name: skill.skill_name,
-        proficiency_level: skill.proficiency_level,
-        category: 'Domestic',
-        category_name: 'Domestic',
-        years_of_experience: Math.floor(Math.random() * 10),
-        is_primary: idx === 0,
-        created_at: new Date().toISOString(),
-      })),
-      documents: [],
-      references: [],
-    }));
+  const getProficiencyColor = (level: string) => {
+    switch (level?.toLowerCase()) {
+      case 'expert': return 'bg-gradient-to-r from-emerald-500 to-green-600 text-white';
+      case 'advanced': return 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white';
+      case 'intermediate': return 'bg-gradient-to-r from-amber-500 to-orange-600 text-white';
+      case 'beginner': return 'bg-gradient-to-r from-gray-400 to-gray-500 text-white';
+      default: return 'bg-gradient-to-r from-gray-400 to-gray-500 text-white';
+    }
   };
 
-  if (isLoading && workers.length === 0) {
+  const getProficiencyProgress = (level: string) => {
+    switch (level?.toLowerCase()) {
+      case 'expert': return 100;
+      case 'advanced': return 75;
+      case 'intermediate': return 50;
+      case 'beginner': return 25;
+      default: return 0;
+    }
+  };
+
+  const parseAdditionalSkills = (skillsInput: any): string[] => {
+    if (!skillsInput) return [];
+    
+    try {
+      // If it's already an array, return it
+      if (Array.isArray(skillsInput)) {
+        return skillsInput.filter(skill => skill && skill.toString().trim().length > 0);
+      }
+      
+      // If it's a string, parse it
+      if (typeof skillsInput === 'string') {
+        const skills = skillsInput
+          .split(/[,;\n]/)
+          .map(skill => skill.trim())
+          .filter(skill => skill.length > 0);
+        
+        return skills;
+      }
+      
+      // If it's a number or other type, convert to string
+      return [skillsInput.toString().trim()].filter(skill => skill.length > 0);
+    } catch (error) {
+      console.error('Error parsing additional skills:', error);
+      return [];
+    }
+  };
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
         <div className="container mx-auto px-4 py-12">
           <div className="text-center">
             <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
-            <p className="text-gray-600">Loading workers from database...</p>
-            <p className="text-sm text-gray-500 mt-2">Fetching real data from backend</p>
+            <p className="text-gray-600">Loading worker details...</p>
           </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+  if (error || !worker) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
         <div className="container mx-auto px-4 py-12">
-          <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
-              Find <span className="text-yellow-300">Verified</span> Skilled Workers
-            </h1>
-            <p className="text-xl mb-8 text-blue-100">
-              Connect with trusted, verified workers across Uganda. Hire with confidence.
-            </p>
-            
-            {/* Search Bar */}
-            <div className="relative max-w-2xl mx-auto mb-4">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <Input
-                type="search"
-                placeholder="Search by name, profession, or skill (e.g., Electrician, Plumber)"
-                value={filters.search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                className="pl-12 py-6 text-lg rounded-xl border-0 focus:ring-2 focus:ring-white"
-              />
-            </div>
-
-            {/* Filter Toggle Button for Mobile */}
-            <div className="flex justify-center mt-4">
-              <Button
-                variant="secondary"
-                onClick={() => setShowFilters(!showFilters)}
-                className="lg:hidden bg-white/20 hover:bg-white/30 text-white"
+          <div className="text-center">
+            <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Worker Not Found</h1>
+            <p className="text-gray-600 mb-6">{error || 'The worker you\'re looking for doesn\'t exist.'}</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button onClick={() => router.push('/workers')}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Workers
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => fetchWorkerDetails()}
               >
-                <Filter className="h-4 w-4 mr-2" />
-                Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+                Retry
               </Button>
             </div>
           </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Active Filters Bar */}
-      {activeFilterCount > 0 && (
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-gray-700">Active Filters:</span>
-              {filters.city && (
-                <Badge variant="secondary" className="gap-1">
-                  City: {filters.city}
-                  <X 
-                    className="h-3 w-3 cursor-pointer" 
-                    onClick={() => clearSingleFilter('city')}
-                  />
-                </Badge>
-              )}
-              {filters.profession && (
-                <Badge variant="secondary" className="gap-1">
-                  Profession: {filters.profession}
-                  <X 
-                    className="h-3 w-3 cursor-pointer" 
-                    onClick={() => clearSingleFilter('profession')}
-                  />
-                </Badge>
-              )}
-              {filters.minExperience > 0 && (
-                <Badge variant="secondary" className="gap-1">
-                  Min Exp: {filters.minExperience}yrs
-                  <X 
-                    className="h-3 w-3 cursor-pointer" 
-                    onClick={() => clearSingleFilter('minExperience')}
-                  />
-                </Badge>
-              )}
-              {filters.availability && filters.availability !== 'all' && (
-                <Badge variant="secondary" className="gap-1">
-                  {getAvailabilityText(filters.availability)}
-                  <X 
-                    className="h-3 w-3 cursor-pointer" 
-                    onClick={() => clearSingleFilter('availability')}
-                  />
-                </Badge>
-              )}
-              {filters.verification && filters.verification !== 'all' && (
-                <Badge variant="secondary" className="gap-1">
-                  {filters.verification === 'verified' ? 'Verified Only' : 'Pending Verification'}
-                  <X 
-                    className="h-3 w-3 cursor-pointer" 
-                    onClick={() => clearSingleFilter('verification')}
-                  />
-                </Badge>
-              )}
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              className="text-red-600 hover:text-red-700"
-            >
-              Clear All
-            </Button>
-          </div>
-        </div>
-      )}
+  // Get skills data
+  const primarySkills = worker.skills?.filter(skill => skill.is_primary) || [];
+  const secondarySkills = worker.skills?.filter(skill => !skill.is_primary) || [];
+  const allSkills = worker.skills || [];
+  
+  // Parse additional skills into an array - SAFELY
+  const additionalSkills = parseAdditionalSkills(worker.additional_skills);
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Filters Sidebar - Always visible on desktop, conditionally on mobile */}
-          <div className={`lg:w-1/4 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-            <Card className="sticky top-8 border-2 border-blue-100 shadow-lg">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-white">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Filter className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">Filters</CardTitle>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowFilters(false)}
-                    className="lg:hidden"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                {activeFilterCount > 0 && (
-                  <CardDescription className="text-blue-600">
-                    {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
-                  </CardDescription>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-6 pt-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    City
-                  </label>
-                  <Input
-                    placeholder="e.g., Kampala, Entebbe"
-                    value={filters.city}
-                    onChange={(e) => handleFilterChange('city', e.target.value)}
-                    className="w-full"
-                  />
-                </div>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    
+      {/* Back Button */}
+      <div className="container mx-auto px-4 pt-8">
+        <Button
+          variant="ghost"
+          onClick={() => router.push('/workers')}
+          className="mb-6 group hover:bg-blue-50 hover:text-blue-600 transition-all duration-200"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+          Back to Workers
+        </Button>
+      </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Profession
-                  </label>
-                  <Input
-                    placeholder="e.g., Electrician, Housekeeper"
-                    value={filters.profession}
-                    onChange={(e) => handleFilterChange('profession', e.target.value)}
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Min Experience
-                    </label>
-                    <span className="text-sm font-medium text-blue-600">
-                      {filters.minExperience} years
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-gray-500">0</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="30"
-                      step="1"
-                      value={filters.minExperience}
-                      onChange={(e) => handleFilterChange('minExperience', parseInt(e.target.value))}
-                      className="flex-1 h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <span className="text-xs text-gray-500">30+</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Availability
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { value: 'full_time', label: 'Full Time' },
-                      { value: 'part_time', label: 'Part Time' },
-                      { value: 'available', label: 'Available' },
-                      { value: 'busy', label: 'Busy' },
-                      { value: 'on_leave', label: 'On Leave' },
-                      { value: '', label: 'All' },
-                    ].map((option) => (
-                      <Button
-                        key={option.value || 'all'}
-                        type="button"
-                        variant={filters.availability === option.value ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => handleFilterChange('availability', option.value)}
-                        className={filters.availability === option.value 
-                          ? "bg-blue-600 hover:bg-blue-700" 
-                          : ""}
-                      >
-                        {option.label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Verification Status
-                  </label>
-                  <div className="space-y-2">
-                    {[
-                      { value: 'all', label: 'All Workers', color: 'bg-gray-100' },
-                      { value: 'verified', label: 'Verified Only', color: 'bg-green-100' },
-                      { value: 'pending', label: 'Pending', color: 'bg-yellow-100' },
-                      { value: 'rejected', label: 'Rejected', color: 'bg-red-100' },
-                    ].map((option) => (
-                      <div
-                        key={option.value}
-                        className={`flex items-center p-2 rounded-lg cursor-pointer ${filters.verification === option.value ? 'ring-2 ring-blue-500' : ''}`}
-                        onClick={() => handleFilterChange('verification', option.value)}
-                      >
-                        <div className={`h-4 w-4 rounded-full mr-3 ${option.color}`}></div>
-                        <span className="text-sm">{option.label}</span>
+      <div className="container mx-auto px-4 pb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Profile Info */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Profile Header */}
+            <Card className="border-0 shadow-2xl bg-gradient-to-br from-white to-blue-50 rounded-3xl overflow-hidden">
+              <CardContent className="p-8">
+                <div className="flex flex-col md:flex-row md:items-start gap-8">
+                  {/* Profile Image */}
+                  <div className="relative shrink-0">
+                    <div className="h-40 w-40 rounded-3xl bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 flex items-center justify-center text-white font-bold text-5xl shadow-2xl shadow-blue-200/50">
+                      {worker.first_name[0]}{worker.last_name[0]}
+                    </div>
+                    {worker.verification_status === 'verified' && (
+                      <div className="absolute -bottom-3 -right-3 h-16 w-16 bg-gradient-to-br from-emerald-400 to-green-600 rounded-full flex items-center justify-center shadow-2xl border-4 border-white">
+                        <Shield className="h-6 w-6 text-white" />
                       </div>
-                    ))}
+                    )}
                   </div>
-                </div>
 
-                <div className="pt-4 border-t">
-                  <Button
-                    onClick={clearFilters}
-                    variant="outline"
-                    className="w-full"
-                    disabled={activeFilterCount === 0}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Clear All Filters
-                  </Button>
+                  {/* Profile Info */}
+                  <div className="flex-1">
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-6">
+                      <div className="space-y-3">
+                        <div className="inline-flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-full border border-blue-200">
+                          <Briefcase className="h-4 w-4 text-blue-600" />
+                          <span className="font-semibold text-blue-700">{worker.profession}</span>
+                        </div>
+                        <h1 className="text-4xl font-bold text-gray-900 tracking-tight">
+                          {worker.full_name}
+                        </h1>
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "inline-flex items-center gap-2 px-4 py-2 rounded-full text-white font-medium",
+                            getAvailabilityColor(worker.availability)
+                          )}>
+                            <Clock className="h-4 w-4" />
+                            {getAvailabilityText(worker.availability)}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Rating */}
+                      <div className="flex items-center gap-3 bg-gradient-to-r from-amber-50 to-orange-50 px-6 py-3 rounded-2xl border border-amber-200 shadow-sm">
+                        <div className="relative">
+                          <Star className="h-8 w-8 text-amber-500 fill-current" />
+                          <div className="absolute inset-0 animate-ping opacity-20">
+                            <Star className="h-8 w-8 text-amber-500 fill-current" />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-3xl font-bold text-gray-900">{worker.rating_average}</div>
+                          <div className="text-sm text-gray-600">{worker.total_reviews} reviews</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Location & Experience */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                          <MapPin className="h-6 w-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-600">Location</div>
+                          <div className="font-semibold text-gray-900">
+                            {worker.city}{worker.district ? `, ${worker.district}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-200 flex items-center justify-center">
+                          <Award className="h-6 w-6 text-green-600" />
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-600">Experience</div>
+                          <div className="font-semibold text-gray-900">{worker.experience_years} years</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-100 to-pink-200 flex items-center justify-center">
+                          <UserCheck className="h-6 w-6 text-purple-600" />
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-600">Completed Jobs</div>
+                          <div className="font-semibold text-gray-900">{worker.total_placements}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Stats Card */}
-            <Card className="mt-6 border-2 border-blue-50 shadow-lg">
-              <CardHeader className="bg-gradient-to-r from-purple-50 to-white">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-purple-600" />
-                  Platform Stats
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 pt-6">
-                <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-white rounded-lg border border-blue-100">
-                  <span className="text-gray-700 font-medium">Total Workers</span>
-                  <span className="font-bold text-gray-900 text-lg">{totalCount}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-white rounded-lg border border-green-100">
-                  <span className="text-gray-700 font-medium">Verified Workers</span>
-                  <span className="font-bold text-green-600 text-lg">
-                    {workers.filter(w => w.verification_status === 'verified').length}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-gradient-to-r from-amber-50 to-white rounded-lg border border-amber-100">
-                  <span className="text-gray-700 font-medium">Avg. Rating</span>
-                  <span className="font-bold text-amber-600 text-lg">
-                    {workers.length > 0 
-                      ? (workers.reduce((sum, w) => sum + parseFloat(w.rating_average || '0'), 0) / workers.length).toFixed(1)
-                      : '0.0'}★
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-white rounded-lg border border-purple-100">
-                  <span className="text-gray-700 font-medium">Active Now</span>
-                  <span className="font-bold text-purple-600 text-lg">
-                    {workers.filter(w => 
-                      w.availability === 'available' || 
-                      w.availability === 'full_time' || 
-                      w.availability === 'part_time'
-                    ).length}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Workers Grid */}
-          <div className="lg:w-3/4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Available Workers
-                </h2>
-                <p className="text-gray-600">
-                  Showing {filteredWorkers.length} of {totalCount} workers
-                  {isRefreshing && (
-                    <span className="ml-2 text-sm text-blue-600">
-                      <Loader2 className="h-3 w-3 animate-spin inline mr-1" />
-                      Updating...
-                    </span>
-                  )}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => fetchWorkers()}
-                  disabled={isRefreshing}
-                  className="gap-2"
-                >
-                  {isRefreshing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Loader2 className="h-4 w-4" />
-                  )}
-                  Refresh
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="lg:hidden gap-2"
-                >
-                  <Filter className="h-4 w-4" />
-                  Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
-                </Button>
-              </div>
-            </div>
-
-            {filteredWorkers.length === 0 ? (
-              <Card className="border-2 border-dashed border-gray-200">
-                <CardContent className="py-16 text-center">
-                  <div className="h-20 w-20 mx-auto mb-6 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center">
-                    <Users className="h-10 w-10 text-blue-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                    No workers found
-                  </h3>
-                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                    {filters.city || filters.profession || filters.search
-                      ? 'No workers match your current filters. Try adjusting your search criteria.'
-                      : 'No workers are currently available. Check back soon!'}
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <Button 
-                      onClick={clearFilters}
-                      className="gap-2"
-                    >
-                      <X className="h-4 w-4" />
-                      Clear All Filters
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      onClick={() => router.push('/')}
-                    >
-                      Back to Home
-                    </Button>
-                  </div>
+            {/* Bio Section */}
+            {worker.bio && (
+              <Card className="border-0 shadow-xl bg-white rounded-3xl overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+                  <CardTitle className="flex items-center gap-3 text-2xl">
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                      <BookOpen className="h-5 w-5 text-blue-600" />
+                    </div>
+                    About {worker.first_name}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-8">
+                  <p className="text-gray-700 whitespace-pre-line leading-relaxed text-lg">{worker.bio}</p>
                 </CardContent>
               </Card>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredWorkers.map((worker) => (
-                    <WorkerCard key={worker.id} worker={worker} />
-                  ))}
+            )}
+
+            {/* Skills Section - IMPROVED */}
+            <Card className="border-0 shadow-xl bg-white rounded-3xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-3 text-2xl">
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                      <Award className="h-5 w-5 text-white" />
+                    </div>
+                    Skills & Expertise
+                  </CardTitle>
+                  <div className="flex items-center gap-3">
+                    <Badge className="px-3 py-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
+                      {allSkills.length} Core Skills
+                    </Badge>
+                    {additionalSkills.length > 0 && (
+                      <Badge variant="outline" className="border-blue-300 text-blue-700">
+                        +{additionalSkills.length} Additional
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-                
-                {/* Load More Button if needed */}
-                {filteredWorkers.length < totalCount && (
-                  <div className="mt-10 text-center">
-                    <Button
-                      onClick={() => {
-                        // Implement load more functionality
-                        console.log('Load more clicked');
-                      }}
-                      variant="outline"
-                      size="lg"
-                      className="px-8 py-6 border-2 border-dashed hover:border-solid"
-                    >
-                      <ChevronRight className="h-4 w-4 mr-2" />
-                      Load More Workers
-                    </Button>
+              </CardHeader>
+              <CardContent className="p-8">
+                <div className="space-y-8">
+                  {/* Primary Skills with visual indicators */}
+                  {primarySkills.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-3 mb-6">
+                        <Trophy className="h-5 w-5 text-amber-600" />
+                        <h3 className="text-xl font-bold text-gray-900">Primary Skills</h3>
+                        <Badge className="bg-gradient-to-r from-amber-500 to-orange-600 text-white">
+                          Specialization
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {primarySkills.map((skill) => (
+                          <div key={skill.id} className="group relative">
+                            <div className="p-5 bg-gradient-to-br from-white to-amber-50 rounded-2xl border-2 border-amber-100 group-hover:border-amber-400 group-hover:shadow-lg transition-all duration-300">
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
+                                      <Target className="h-4 w-4 text-amber-600" />
+                                    </div>
+                                    <h4 className="font-bold text-gray-900 text-lg">{skill.skill_name}</h4>
+                                  </div>
+                                  {skill.category_name && skill.category_name !== 'General' && (
+                                    <p className="text-sm text-gray-600">Category: {skill.category_name}</p>
+                                  )}
+                                </div>
+                                <div className="flex flex-col items-end">
+                                  <span className={cn(
+                                    "px-3 py-1 rounded-full text-xs font-bold mb-2",
+                                    getProficiencyColor(skill.proficiency_level)
+                                  )}>
+                                    {skill.proficiency_level}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-500">{skill.years_of_experience} years</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-600">Proficiency</span>
+                                  <span className="font-medium text-gray-900">
+                                    {getProficiencyProgress(skill.proficiency_level)}%
+                                  </span>
+                                </div>
+                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                  <div 
+                                    className={cn(
+                                      "h-full rounded-full transition-all duration-500",
+                                      skill.proficiency_level === 'expert' ? 'bg-gradient-to-r from-emerald-400 to-green-500' :
+                                      skill.proficiency_level === 'advanced' ? 'bg-gradient-to-r from-blue-400 to-indigo-500' :
+                                      skill.proficiency_level === 'intermediate' ? 'bg-gradient-to-r from-amber-400 to-orange-500' :
+                                      'bg-gradient-to-r from-gray-400 to-gray-500'
+                                    )}
+                                    style={{ width: `${getProficiencyProgress(skill.proficiency_level)}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Secondary Skills */}
+                  {secondarySkills.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-3 mb-6">
+                        <TrendingUp className="h-5 w-5 text-blue-600" />
+                        <h3 className="text-xl font-bold text-gray-900">Secondary Skills</h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {secondarySkills.map((skill) => (
+                          <div key={skill.id} className="group">
+                            <div className="p-4 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200 group-hover:border-blue-300 group-hover:shadow-md transition-all duration-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <BarChart3 className="h-4 w-4 text-blue-500" />
+                                  <span className="font-semibold text-gray-900">{skill.skill_name}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between text-sm">
+                                {skill.category_name && skill.category_name !== 'General' && (
+                                  <span className="text-gray-600">{skill.category_name}</span>
+                                )}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-gray-900 font-medium">
+                                    {skill.years_of_experience} yrs
+                                  </span>
+                                  <span className={cn(
+                                    "px-2 py-0.5 rounded-full text-xs font-medium",
+                                    getProficiencyColor(skill.proficiency_level)
+                                  )}>
+                                    {skill.proficiency_level}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Additional Skills Section - FIXED with error handling */}
+                  {additionalSkills.length > 0 && (
+                    <div className="pt-6 border-t border-gray-200">
+                      <div className="flex items-center gap-3 mb-4">
+                        <Sparkles className="h-5 w-5 text-purple-600" />
+                        <h3 className="text-xl font-bold text-gray-900">Additional Skills</h3>
+                        <Badge variant="outline" className="border-purple-300 text-purple-700">
+                          {additionalSkills.length} skills
+                        </Badge>
+                      </div>
+                      <div className="p-4 bg-gradient-to-br from-purple-50 to-white rounded-2xl border border-purple-200">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                          {additionalSkills.map((skill, index) => (
+                            <div 
+                              key={index} 
+                              className="group flex items-center gap-2 p-3 bg-white rounded-xl border border-gray-200 hover:border-purple-300 hover:shadow-sm transition-all duration-200"
+                            >
+                              <ChevronRight className="h-3 w-3 text-purple-500 group-hover:translate-x-1 transition-transform" />
+                              <span className="text-gray-800 font-medium">{skill}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fallback if no skills at all */}
+                  {allSkills.length === 0 && additionalSkills.length === 0 && (
+                    <div className="text-center py-8">
+                      <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                        <Award className="h-8 w-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Skills Listed</h3>
+                      <p className="text-gray-600">This worker hasn't added any skills yet.</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Experience & Education Section */}
+            <Card className="border-0 shadow-xl bg-white rounded-3xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-100">
+                <CardTitle className="flex items-center gap-3 text-2xl">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
+                    <GraduationCap className="h-5 w-5 text-white" />
+                  </div>
+                  Qualifications & Experience
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-8">
+                <div className="space-y-6">
+                  {/* Experience Summary */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="p-4 bg-gradient-to-br from-blue-50 to-white rounded-2xl border border-blue-100">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                          <Clock className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-gray-900">Total Experience</h4>
+                          <p className="text-3xl font-bold text-blue-600">{worker.experience_years} years</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600">Professional experience in relevant fields</p>
+                    </div>
+
+                    {/* Education Level */}
+                    {worker.education_level && (
+                      <div className="p-4 bg-gradient-to-br from-green-50 to-white rounded-2xl border border-green-100">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-green-100 to-emerald-200 flex items-center justify-center">
+                            <GraduationCap className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-gray-900">Education Level</h4>
+                            <p className="text-lg font-bold text-green-600">{worker.education_level}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Skills Summary */}
+                  {allSkills.length > 0 && (
+                    <div className="pt-4 border-t border-gray-200">
+                      <h4 className="text-lg font-bold text-gray-900 mb-3">Skills Summary</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {/* Proficiency Distribution */}
+                        <div className="space-y-2">
+                          <div className="text-sm text-gray-600">Expert Level</div>
+                          <div className="text-2xl font-bold text-emerald-600">
+                            {allSkills.filter(s => s.proficiency_level.toLowerCase() === 'expert').length}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-sm text-gray-600">Advanced</div>
+                          <div className="text-2xl font-bold text-blue-600">
+                            {allSkills.filter(s => s.proficiency_level.toLowerCase() === 'advanced').length}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-sm text-gray-600">Intermediate</div>
+                          <div className="text-2xl font-bold text-amber-600">
+                            {allSkills.filter(s => s.proficiency_level.toLowerCase() === 'intermediate').length}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-sm text-gray-600">Beginner</div>
+                          <div className="text-2xl font-bold text-gray-600">
+                            {allSkills.filter(s => s.proficiency_level.toLowerCase() === 'beginner').length}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column - Contact & Details */}
+          <div className="space-y-8">
+            {/* Contact Card */}
+            <Card className="border-0 shadow-2xl bg-gradient-to-b from-white to-blue-50 rounded-3xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <MessageSquare className="h-5 w-5" />
+                  Contact Worker
+                </CardTitle>
+                <CardDescription className="text-blue-100">
+                  Send a message to discuss opportunities
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                {/* Contact Info */}
+                <div className="space-y-4">
+                  {worker.phone && (
+                    <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-blue-100 shadow-sm">
+                      <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                        <Phone className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-600">Phone Number</div>
+                        <div className="font-semibold text-gray-900">{worker.phone}</div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {worker.email && (
+                    <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-purple-100 shadow-sm">
+                      <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-100 to-pink-200 flex items-center justify-center">
+                        <Mail className="h-5 w-5 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-600">Email Address</div>
+                        <div className="font-semibold text-gray-900 break-all">{worker.email}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Hourly Rate */}
+                {worker.hourly_rate && parseFloat(worker.hourly_rate) > 0 && (
+                  <div className="p-5 bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl border border-emerald-200 shadow-sm">
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-2">Hourly Rate</div>
+                      <div className="text-4xl font-bold bg-gradient-to-r from-emerald-600 to-green-700 bg-clip-text text-transparent">
+                        UGX {parseFloat(worker.hourly_rate).toLocaleString()}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-2">per hour • Negotiable</div>
+                    </div>
                   </div>
                 )}
-              </>
-            )}
+
+                {/* Quick Stats */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200">
+                    <div className="text-xs text-gray-600">Reviews</div>
+                    <div className="text-lg font-bold text-gray-900">{worker.total_reviews}</div>
+                  </div>
+                  <div className="p-3 bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200">
+                    <div className="text-xs text-gray-600">Jobs Done</div>
+                    <div className="text-lg font-bold text-gray-900">{worker.total_placements}</div>
+                  </div>
+                </div>
+
+                {/* Contact Button */}
+                <Button
+                  onClick={() => setShowContactModal(true)}
+                  className="w-full py-6 text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                  size="lg"
+                >
+                  <MessageSquare className="h-5 w-5 mr-3" />
+                  Contact {worker.first_name}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Details Card */}
+            <Card className="border-0 shadow-xl bg-white rounded-3xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                    <Users className="h-5 w-5 text-gray-700" />
+                  </div>
+                  Additional Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                {/* Languages */}
+                {worker.languages && Object.keys(worker.languages).length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 font-medium text-gray-900">
+                      <Languages className="h-4 w-4" />
+                      Languages
+                    </div>
+                    <div className="space-y-2">
+                      {Object.entries(worker.languages).map(([language, level]) => (
+                        <div key={language} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg">
+                          <span className="font-medium text-gray-900">{language}</span>
+                          <Badge variant="secondary" className="font-normal">
+                            {level}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Age & Member Since */}
+                <div className="grid grid-cols-2 gap-4">
+                  {worker.age && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-gray-900">Age</div>
+                      <div className="p-3 bg-gray-50 rounded-xl">
+                        <span className="font-semibold text-gray-900">{worker.age} years</span>
+                      </div>
+                    </div>
+                  )}
+                  {worker.created_at && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-gray-900">Member Since</div>
+                      <div className="p-3 bg-gray-50 rounded-xl">
+                        <span className="font-semibold text-gray-900">
+                          {formatDate(worker.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Trust Score */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-900">Trust Score</span>
+                    <span className="font-bold text-gray-900">{worker.trust_score}%</span>
+                  </div>
+                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-400 via-green-500 to-emerald-600"
+                      style={{ width: `${worker.trust_score}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-xs text-gray-500 flex justify-between">
+                    <span>Low</span>
+                    <span>High</span>
+                  </div>
+                </div>
+
+                {/* Verification Status */}
+                <div className="space-y-3">
+                  <div className="font-medium text-gray-900">Verification Status</div>
+                  <div className={cn(
+                    "p-4 rounded-2xl flex items-center gap-3",
+                    worker.verification_status === 'verified' ? 'bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200' :
+                    worker.verification_status === 'pending' ? 'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200' :
+                    'bg-gradient-to-r from-red-50 to-pink-50 border border-red-200'
+                  )}>
+                    {worker.verification_status === 'verified' ? (
+                      <CheckCircle className="h-6 w-6 text-emerald-600" />
+                    ) : (
+                      <Clock className="h-6 w-6 text-amber-600" />
+                    )}
+                    <div>
+                      <div className="font-semibold text-gray-900">
+                        {worker.verification_status.charAt(0).toUpperCase() + worker.verification_status.slice(1)}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {worker.verification_status === 'verified' ? 'Fully verified and trusted' : 'Verification in progress'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// Worker Card Component
-function WorkerCard({ worker }: { worker: WorkerProfile }) {
-  const router = useRouter();
-  const [showContactModal, setShowContactModal] = useState(false);
-
-  const getAvailabilityColor = (availability: string) => {
-    switch (availability?.toLowerCase()) {
-      case 'full_time': return 'bg-green-100 text-green-800 border-green-200';
-      case 'part_time': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'available': return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'busy': return 'bg-red-100 text-red-800 border-red-200';
-      case 'on_leave': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'not_available': return 'bg-gray-100 text-gray-800 border-gray-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getAvailabilityText = (availability: string) => {
-    switch (availability?.toLowerCase()) {
-      case 'full_time': return 'Full Time';
-      case 'part_time': return 'Part Time';
-      case 'available': return 'Available';
-      case 'busy': return 'Busy';
-      case 'on_leave': return 'On Leave';
-      case 'not_available': return 'Not Available';
-      default: return availability || 'Not Specified';
-    }
-  };
-
-  const getVerificationStatus = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'verified':
-        return (
-          <div className="absolute -top-1 -right-1 h-7 w-7 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-            <Shield className="h-3 w-3 text-white" />
-          </div>
-        );
-      case 'pending':
-        return (
-          <div className="absolute -top-1 -right-1 h-7 w-7 bg-gradient-to-br from-yellow-400 to-amber-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-            <Clock className="h-3 w-3 text-white" />
-          </div>
-        );
-      case 'rejected':
-        return (
-          <div className="absolute -top-1 -right-1 h-7 w-7 bg-gradient-to-br from-red-400 to-red-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-            <XCircle className="h-3 w-3 text-white" />
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <>
-      <Card className="group hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-transparent hover:border-blue-200 hover:scale-[1.02]">
-        <CardContent className="p-6">
-          <div className="flex items-start space-x-4">
-            {/* Profile Image */}
-            <div className="relative">
-              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                {worker.first_name?.[0] || 'W'}{worker.last_name?.[0] || 'D'}
-              </div>
-              {getVerificationStatus(worker.verification_status)}
-            </div>
-
-            {/* Worker Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-start">
-                <div className="min-w-0">
-                  <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors truncate">
-                    {worker.full_name}
-                  </h3>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <Briefcase className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                    <span className="text-gray-700 font-medium truncate">
-                      {worker.profession || 'Worker'}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-1 flex-shrink-0">
-                  <Star className="h-4 w-4 text-amber-400 fill-current" />
-                  <span className="font-bold text-gray-900">
-                    {worker.rating_average || '0.0'}
-                  </span>
-                  <span className="text-gray-500 text-sm">
-                    ({worker.total_reviews || 0})
-                  </span>
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {/* Location */}
-                {worker.city && (
-                  <div className="flex items-center text-gray-600">
-                    <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
-                    <span className="truncate">
-                      {worker.city}{worker.district ? `, ${worker.district}` : ', Uganda'}
-                    </span>
-                  </div>
-                )}
-
-                {/* Experience */}
-                {worker.experience_years > 0 && (
-                  <div className="flex items-center text-gray-600">
-                    <Award className="h-4 w-4 mr-2 flex-shrink-0" />
-                    <span>{worker.experience_years} years experience</span>
-                  </div>
-                )}
-
-                {/* Availability */}
-                <div className="flex items-center">
-                  <Clock className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getAvailabilityColor(worker.availability)}`}>
-                    {getAvailabilityText(worker.availability)}
-                  </span>
-                </div>
-
-                {/* Skills */}
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {worker.skills?.slice(0, 3).map((skill, index) => (
-                    <span
-                      key={skill.id || index}
-                      className="px-2 py-1 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 text-xs rounded-full border border-blue-200"
-                    >
-                      {skill.skill_name}
-                    </span>
-                  ))}
-                  {worker.skills && worker.skills.length > 3 && (
-                    <span className="text-xs text-gray-500">
-                      +{worker.skills.length - 3} more
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex space-x-3 mt-6 pt-4 border-t border-gray-100">
-                <Button
-                  variant="outline"
-                  className="flex-1 hover:bg-blue-50 hover:text-blue-600"
-                  onClick={() => router.push(`/workers/${worker.id}`)}
-                >
-                  <Eye className="h-4 w-4 mr-2" />
-                  View
-                </Button>
-                
-                <Button
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                  onClick={() => setShowContactModal(true)}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Contact
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Contact Modal */}
-      {showContactModal && (
+      {showContactModal && worker && (
         <ContactModal 
           worker={{
             id: worker.id,
@@ -908,18 +800,15 @@ function WorkerCard({ worker }: { worker: WorkerProfile }) {
             district: worker.district,
             experience_years: worker.experience_years,
             total_reviews: worker.total_reviews,
-            trust_score: worker.trust_score,
             profile_photo_url: worker.profile_photo_url,
             email: worker.email,
             phone: worker.phone,
-            skills: worker.skills.map(skill => ({
-              skill_name: skill.skill_name,
-              proficiency_level: skill.proficiency_level
-            }))
+            skills: worker.skills?.map(skill => skill.skill_name) || []
           }}
           onClose={() => setShowContactModal(false)}
         />
       )}
-    </>
+
+    </div>
   );
 }
