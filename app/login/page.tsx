@@ -1,10 +1,9 @@
-// app/login/page.tsx
+// app/login/page.tsx - COMPLETE FIXED VERSION
 'use client';
 
 import { useState, FormEvent, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +22,8 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get('from') || '/dashboard';
+  const registered = searchParams.get('registered');
+  const verified = searchParams.get('verified');
   
   const { login, isAuthenticated } = useAuth();
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -33,6 +34,20 @@ export default function LoginPage() {
   });
   const [error, setError] = useState<string>('');
   const [showSocialLogin, setShowSocialLogin] = useState<boolean>(false);
+
+  // Show success message if user just registered
+  useEffect(() => {
+    if (registered === 'true') {
+      toast.success('Registration successful! Please login with your credentials.', {
+        duration: 5000,
+      });
+    }
+    if (verified === 'true') {
+      toast.success('Phone verified successfully! You can now login.', {
+        duration: 5000,
+      });
+    }
+  }, [registered, verified]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -51,13 +66,34 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      // Validate form
+      if (!formData.email.trim() || !formData.password.trim()) {
+        throw new Error('Email and password are required');
+      }
+
+      // Attempt login
       await login(formData);
+      
+      // Success message
       toast.success('Welcome back! Login successful! 🎉');
-      router.push(from);
-      router.refresh();
+      
+      // The redirect is handled in useAuth's login function
     } catch (err: any) {
       console.error('Login error:', err);
-      const errorMessage = err.message || 'Invalid email or password';
+      
+      // Handle different error types
+      let errorMessage = 'Invalid email or password';
+      
+      if (err.response?.status === 401) {
+        errorMessage = 'Invalid email or password. Please try again.';
+      } else if (err.response?.status === 403) {
+        errorMessage = 'Your account has been suspended. Please contact support.';
+      } else if (err.response?.status === 404) {
+        errorMessage = 'Account not found. Please check your email or register.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -76,12 +112,24 @@ export default function LoginPage() {
   const handlePhoneLogin = () => {
     toast('Phone login coming soon!', {
       icon: '📱',
+      duration: 3000,
     });
+    // You could redirect to phone login page
+    // router.push('/auth/phone-login');
   };
 
   const handleGoogleLogin = () => {
     toast('Google login coming soon!', {
       icon: '🔜',
+      duration: 3000,
+    });
+  };
+
+  const handleDemoLogin = () => {
+    // Quick demo login for testing
+    setFormData({
+      email: 'demo@workconnect.ug',
+      password: 'Demo123!',
     });
   };
 
@@ -217,7 +265,7 @@ export default function LoginPage() {
                           <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                           <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                         </svg>
-                        <span className="font-medium text-gray-700">Continue with Google</span>
+                        <span className="font-medium text-gray-700">Google</span>
                       </button>
                       
                       <button
@@ -226,7 +274,7 @@ export default function LoginPage() {
                         className="flex-1 flex items-center justify-center space-x-2 px-4 py-3 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
                       >
                         <PhoneIcon className="h-5 w-5 text-gray-700" />
-                        <span className="font-medium text-gray-700">Use Phone</span>
+                        <span className="font-medium text-gray-700">Phone</span>
                       </button>
                     </div>
                     
@@ -303,6 +351,19 @@ export default function LoginPage() {
                       </div>
                     </div>
 
+                    {/* Demo Login Button (for testing) */}
+                    {process.env.NODE_ENV === 'development' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleDemoLogin}
+                        className="w-full border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 py-4"
+                      >
+                        <Zap className="h-4 w-4 mr-2" />
+                        Fill Demo Credentials
+                      </Button>
+                    )}
+
                     <Button
                       type="submit"
                       className="w-full group relative bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-7 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden"
@@ -317,7 +378,7 @@ export default function LoginPage() {
                       ) : (
                         <>
                           <LogIn className="mr-3 h-5 w-5" />
-                          Sign In to Your Account
+                          Sign In
                           <ArrowLeft className="ml-3 h-5 w-5 rotate-180 group-hover:translate-x-1 transition-transform" />
                         </>
                       )}

@@ -17,7 +17,6 @@ export interface WorkerProfile {
   education_level?: string;
   languages?: Record<string, any>;
   
-  // Add these missing fields from your Django model
   email?: string;
   profession?: string; // This was missing!
   hourly_rate?: string; // From AdminWorker model

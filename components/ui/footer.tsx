@@ -1,4 +1,4 @@
-// components/ui/footer.tsx
+// components/ui/footer.tsx - FIXED VERSION
 'use client';
 
 import Link from 'next/link';
@@ -82,7 +82,7 @@ export default function Footer({ variant = 'default' }: FooterProps) {
               Transforming the job market through technology, trust, and opportunity.
             </p>
             
-            {/* Newsletter */}
+            {/* Newsletter - FIXED: Added suppressHydrationWarning to input */}
             <div className="mb-8">
               <h4 className="font-semibold mb-3 text-white">Stay Updated</h4>
               <div className="flex gap-2">
@@ -90,6 +90,7 @@ export default function Footer({ variant = 'default' }: FooterProps) {
                   type="email"
                   placeholder="Your email"
                   className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  suppressHydrationWarning={true}  // 🔴 ADD THIS LINE
                 />
                 <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
                   <Mail className="h-4 w-4" />

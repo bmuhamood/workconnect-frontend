@@ -37,78 +37,78 @@ export default function WorkerDetailPage() {
     }
   }, [workerId]);
 
-  const fetchWorkerDetails = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      // Use the correct endpoint from your Swagger docs
-      const response = await api.get(`/workers/profile/${workerId}/`);
+const fetchWorkerDetails = async () => {
+  try {
+    setIsLoading(true);
+    setError(null);
+    
+    // 🔴 FIXED: Use the correct endpoint from your Swagger docs
+    const response = await api.get(`/users/workers/profile/${workerId}/`);
 
-      const workerData = response.data;
-      
-      // Debug: Log the worker data to see its structure
-      console.log('Worker Data:', workerData);
-      
-      // Transform data from API to match your TypeScript interface
-      const transformedWorker: WorkerProfile = {
-        id: workerData.id,
-        first_name: workerData.first_name || '',
-        last_name: workerData.last_name || '',
-        full_name: workerData.full_name || `${workerData.first_name || ''} ${workerData.last_name || ''}`.trim(),
-        date_of_birth: workerData.date_of_birth,
-        age: workerData.age?.toString(),
-        gender: workerData.gender as any,
-        national_id: workerData.national_id,
-        profile_photo_url: workerData.profile_photo_url || '',
-        bio: workerData.bio,
-        city: workerData.city || 'Kampala',
-        district: workerData.district || '',
-        location_lat: workerData.location_lat?.toString(),
-        location_lng: workerData.location_lng?.toString(),
-        experience_years: workerData.experience_years || 0,
-        education_level: workerData.education_level,
-        languages: workerData.languages || {},
-        email: workerData.user?.email || workerData.email || '',
-        profession: workerData.profession || 'Worker',
-        hourly_rate: workerData.hourly_rate?.toString() || '0',
-        additional_skills: workerData.additional_skills || '',
-        phone: workerData.user?.phone || workerData.phone || '',
-        availability: workerData.availability || 'available',
-        expected_salary_min: workerData.expected_salary_min,
-        expected_salary_max: workerData.expected_salary_max,
-        verification_status: workerData.verification_status || 'pending',
-        trust_score: workerData.trust_score || 0,
-        rating_average: workerData.rating_average?.toString() || '0.0',
-        total_reviews: workerData.total_reviews || 0,
-        total_placements: workerData.total_placements || 0,
-        subscription_tier: workerData.subscription_tier || 'free',
-        subscription_expires_at: workerData.subscription_expires_at,
-        created_at: workerData.created_at,
-        updated_at: workerData.updated_at,
-        skills: (workerData.skills || []).map((skill: any) => ({
-          id: skill.id,
-          category: skill.category?.name || skill.category_name || 'General',
-          category_name: skill.category?.name || skill.category_name || 'General',
-          skill_name: skill.skill_name || skill.name || 'Skill',
-          proficiency_level: skill.proficiency_level || skill.level || 'beginner',
-          years_of_experience: skill.years_of_experience || skill.experience_years || 0,
-          is_primary: skill.is_primary || false,
-          created_at: skill.created_at,
-        })),
-        documents: workerData.documents || [],
-        references: workerData.references || [],
-      };
+    const workerData = response.data;
+    
+    // Debug: Log the worker data to see its structure
+    console.log('Worker Data:', workerData);
+    
+    // Transform data from API to match your TypeScript interface
+    const transformedWorker: WorkerProfile = {
+      id: workerData.id,
+      first_name: workerData.first_name || '',
+      last_name: workerData.last_name || '',
+      full_name: workerData.full_name || `${workerData.first_name || ''} ${workerData.last_name || ''}`.trim(),
+      date_of_birth: workerData.date_of_birth,
+      age: workerData.age?.toString(),
+      gender: workerData.gender as any,
+      national_id: workerData.national_id,
+      profile_photo_url: workerData.profile_photo_url || '',
+      bio: workerData.bio,
+      city: workerData.city || 'Kampala',
+      district: workerData.district || '',
+      location_lat: workerData.location_lat?.toString(),
+      location_lng: workerData.location_lng?.toString(),
+      experience_years: workerData.experience_years || 0,
+      education_level: workerData.education_level,
+      languages: workerData.languages || {},
+      email: workerData.user?.email || workerData.email || '',
+      profession: workerData.profession || 'Worker',
+      hourly_rate: workerData.hourly_rate?.toString() || '0',
+      additional_skills: workerData.additional_skills || '',
+      phone: workerData.user?.phone || workerData.phone || '',
+      availability: workerData.availability || 'available',
+      expected_salary_min: workerData.expected_salary_min,
+      expected_salary_max: workerData.expected_salary_max,
+      verification_status: workerData.verification_status || 'pending',
+      trust_score: workerData.trust_score || 0,
+      rating_average: workerData.rating_average?.toString() || '0.0',
+      total_reviews: workerData.total_reviews || 0,
+      total_placements: workerData.total_placements || 0,
+      subscription_tier: workerData.subscription_tier || 'free',
+      subscription_expires_at: workerData.subscription_expires_at,
+      created_at: workerData.created_at,
+      updated_at: workerData.updated_at,
+      skills: (workerData.skills || []).map((skill: any) => ({
+        id: skill.id,
+        category: skill.category?.name || skill.category_name || 'General',
+        category_name: skill.category?.name || skill.category_name || 'General',
+        skill_name: skill.skill_name || skill.name || 'Skill',
+        proficiency_level: skill.proficiency_level || skill.level || 'beginner',
+        years_of_experience: skill.years_of_experience || skill.experience_years || 0,
+        is_primary: skill.is_primary || false,
+        created_at: skill.created_at,
+      })),
+      documents: workerData.documents || [],
+      references: workerData.references || [],
+    };
 
-      setWorker(transformedWorker);
-    } catch (error: any) {
-      console.error('Error fetching worker details:', error);
-      setError(error.response?.data?.detail || error.message || 'Failed to load worker details');
-      setWorker(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    setWorker(transformedWorker);
+  } catch (error: any) {
+    console.error('Error fetching worker details:', error);
+    setError(error.response?.data?.detail || error.message || 'Failed to load worker details');
+    setWorker(null);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const getAvailabilityColor = (availability: string) => {
     switch (availability?.toLowerCase()) {

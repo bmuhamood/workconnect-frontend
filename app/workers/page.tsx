@@ -150,7 +150,7 @@ export default function WorkersPage() {
       if (activeFilters.search) params.search = activeFilters.search;
 
       // Use the correct endpoint from your Swagger docs
-      const response = await api.get('/workers/profile/', { params });
+      const response = await api.get('/users/workers/profile/', { params });
 
       // Handle the response format from Django REST Framework
       let workersData: WorkerProfile[] = [];
