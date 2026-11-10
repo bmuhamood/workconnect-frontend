@@ -1,20 +1,100 @@
 @import "tailwindcss";
 
+/*
+ * WorkConnect — "mission control for trust".
+ * Dark ink base, luminous glass panels, one signal-blue brand, ice-cyan for verified/live states.
+ * The slate scale is remapped (inverted) so every existing utility (text-slate-500, border-slate-200 …) lands on the dark palette.
+ */
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --color-brand-50: #eef2ff; --color-brand-100: #e0e7ff; --color-brand-200: #c7d2fe;
-  --color-brand-400: #818cf8; --color-brand-500: #6366f1; --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca; --color-brand-900: #312e81;
-  --animate-fade-up: fade-up .5s ease-out both;
-  @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-display: "Sora", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --color-white: #0d1326;          /* card / surface */
+  --color-onbrand: #ffffff;        /* text on brand-coloured fills */
+  --color-slate-50: #060913;       /* page ink */
+  --color-slate-100: #121a35;
+  --color-slate-200: #1f2a52;
+  --color-slate-300: #2e3b6e;
+  --color-slate-400: #7280b4;
+  --color-slate-500: #98a3d0;
+  --color-slate-600: #b3bce0;
+  --color-slate-700: #ccd3f3;
+  --color-slate-800: #e3e8ff;
+  --color-slate-900: #f3f5ff;
+
+  --color-brand-50: rgb(110 128 255 / 0.13);
+  --color-brand-100: rgb(110 128 255 / 0.22);
+  --color-brand-200: rgb(110 128 255 / 0.38);
+  --color-brand-400: #8794ff;
+  --color-brand-500: #6e80ff;
+  --color-brand-600: #4f5cf5;
+  --color-brand-700: #4150e0;
+  --color-brand-900: #2a3380;
+  --color-accent: #a9b4ff;         /* brand-coloured text on dark */
+  --color-accent-strong: #c9d0ff;
+  --color-signal: #3de0ff;         /* verified / live */
+
+  --color-emerald-50: rgb(45 212 191 / 0.13);
+  --color-emerald-600: rgb(45 212 191 / 0.35);
+  --color-emerald-700: #5eead4;
+  --color-amber-50: rgb(251 191 36 / 0.13);
+  --color-amber-600: rgb(251 191 36 / 0.35);
+  --color-amber-700: #fcd34d;
+  --color-rose-50: rgb(251 113 133 / 0.14);
+  --color-rose-600: #e11d48;
+  --color-rose-700: #fda4af;
+
+  --animate-rise: rise .7s cubic-bezier(.2,.7,.2,1) both;
+  --animate-pulse-node: pulse-node 3.2s ease-in-out infinite;
+  --animate-flow: flow 5s linear infinite;
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes pulse-node { 0%, 100% { opacity: .55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.18); } }
+  @keyframes flow { to { stroke-dashoffset: -48; } }
 }
 
-html { scroll-behavior: smooth; }
-body { @apply bg-slate-50 text-slate-900 antialiased; font-family: var(--font-sans); }
-::selection { background: var(--color-brand-200); }
-:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+html { color-scheme: dark; scroll-behavior: smooth; }
+body {
+  @apply antialiased;
+  color: var(--color-slate-900);
+  font-family: var(--font-sans);
+  background-color: #060913;
+  background-image:
+    radial-gradient(900px 520px at 8% -8%, rgb(79 92 245 / .26), transparent 60%),
+    radial-gradient(760px 460px at 96% 4%, rgb(61 224 255 / .12), transparent 60%),
+    radial-gradient(700px 500px at 50% 112%, rgb(124 92 255 / .14), transparent 60%);
+  background-attachment: fixed;
+}
+body::before { /* faint engineering grid, fades out toward the bottom */
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: linear-gradient(rgb(148 163 255 / .045) 1px, transparent 1px), linear-gradient(90deg, rgb(148 163 255 / .045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 70%);
+}
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
+::selection { background: rgb(110 128 255 / .45); color: #fff; }
+:focus-visible { outline: 2px solid var(--color-signal); outline-offset: 2px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
-.input { @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs transition placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 disabled:opacity-60; }
-.card { @apply rounded-2xl border border-slate-200/80 bg-white shadow-xs; }
+.card {
+  border-radius: 1rem;
+  border: 1px solid rgb(148 163 255 / .14);
+  background: linear-gradient(180deg, rgb(19 27 56 / .78), rgb(11 17 38 / .78));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .05), 0 18px 40px -24px rgb(0 0 0 / .7);
+  backdrop-filter: blur(14px);
+}
+a.card { transition: border-color .2s, box-shadow .2s, transform .2s; }
+a.card:hover { border-color: rgb(110 128 255 / .55); box-shadow: inset 0 1px 0 rgb(255 255 255 / .06), 0 0 0 1px rgb(110 128 255 / .25), 0 18px 50px -18px rgb(79 92 245 / .55); }
+
+.input {
+  @apply w-full rounded-xl px-3.5 py-2.5 text-sm transition placeholder:text-slate-400 disabled:opacity-60;
+  background: rgb(6 9 19 / .65); color: var(--color-slate-900);
+  border: 1px solid rgb(148 163 255 / .18);
+}
+.input:focus { outline: none; border-color: var(--color-signal); box-shadow: 0 0 0 4px rgb(61 224 255 / .12); }
 .container-x { @apply mx-auto w-full max-w-6xl px-4 sm:px-6; }
-.gradient-text { @apply bg-gradient-to-r from-brand-600 to-fuchsia-500 bg-clip-text text-transparent; }
+.glow-text { text-shadow: 0 0 40px rgb(110 128 255 / .55); }
+.hairline { height: 1px; background: linear-gradient(90deg, transparent, rgb(148 163 255 / .3), transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}

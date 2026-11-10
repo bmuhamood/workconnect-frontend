@@ -1,7 +1,7 @@
 import Link from "next/link";
 export function Footer() {
   const col = (t: string, items: [string, string][]) => (
-    <div><div className="mb-3 text-sm font-semibold">{t}</div><ul className="space-y-2 text-sm text-slate-500">{items.map(([l, h]) => <li key={h}><Link href={h} className="hover:text-brand-600">{l}</Link></li>)}</ul></div>
+    <div><div className="mb-3 text-sm font-semibold">{t}</div><ul className="space-y-2 text-sm text-slate-500">{items.map(([l, h]) => <li key={h}><Link href={h} className="hover:text-accent-strong">{l}</Link></li>)}</ul></div>
   );
   return (
     <footer className="mt-24 border-t border-slate-200 bg-white">

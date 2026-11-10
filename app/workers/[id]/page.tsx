@@ -38,7 +38,7 @@ export default async function WorkerPage({ params, searchParams }: { params: Pro
       </div>
       <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
         <div className="card p-6">
-          <div className="text-sm text-slate-500">Expected salary</div><div className="text-2xl font-bold text-brand-700">{w.p.expectedSalary ? `${ugx(w.p.expectedSalary)}/mo` : "Negotiable"}</div>
+          <div className="text-sm text-slate-500">Expected salary</div><div className="text-2xl font-bold text-accent">{w.p.expectedSalary ? `${ugx(w.p.expectedSalary)}/mo` : "Negotiable"}</div>
           <div className="mt-5 space-y-2">
             {!s ? <LinkButton href="/login" className="w-full">Sign in to hire or message</LinkButton> : s.userId === id ? <p className="text-sm text-slate-500">This is your public profile.</p> : <>
               <MessageButton userId={id} />

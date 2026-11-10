@@ -7,11 +7,11 @@ import { initials } from "@/lib/format";
 export const cn = (...a: Parameters<typeof clsx>) => twMerge(clsx(a));
 
 const variants = {
-  primary: "bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:scale-[.98]",
-  secondary: "bg-white text-slate-800 border border-slate-200 hover:bg-slate-50",
-  ghost: "text-slate-600 hover:bg-slate-100",
-  danger: "bg-rose-600 text-white hover:bg-rose-700",
-  soft: "bg-brand-50 text-brand-700 hover:bg-brand-100",
+  primary: "bg-gradient-to-br from-brand-600 to-[#6a4fe6] text-onbrand shadow-[0_8px_24px_-8px_rgba(79,92,245,.8)] hover:brightness-110 active:scale-[.98]",
+  secondary: "bg-slate-100/60 text-slate-800 border border-slate-300/60 hover:border-brand-400/60 hover:bg-slate-100",
+  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+  danger: "bg-rose-600 text-onbrand hover:bg-rose-500",
+  soft: "bg-brand-50 text-accent hover:bg-brand-100",
 };
 export const btn = (v: keyof typeof variants = "primary", size: "sm" | "md" | "lg" = "md") =>
   cn("inline-flex items-center justify-center gap-2 rounded-xl font-medium transition disabled:opacity-60 disabled:pointer-events-none",
@@ -22,9 +22,9 @@ export function LinkButton({ href, variant, size, className, children }: { href:
 }
 
 const tones: Record<string, string> = {
-  gray: "bg-slate-100 text-slate-700", green: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
-  amber: "bg-amber-50 text-amber-700 ring-amber-600/20", red: "bg-rose-50 text-rose-700 ring-rose-600/20",
-  blue: "bg-brand-50 text-brand-700 ring-brand-600/20",
+  gray: "bg-slate-100 text-slate-700", green: "bg-emerald-50 text-emerald-700 ring-emerald-600/40",
+  amber: "bg-amber-50 text-amber-700 ring-amber-600/40", red: "bg-rose-50 text-rose-700 ring-rose-600/40",
+  blue: "bg-brand-50 text-accent ring-brand-600/20",
 };
 export const Badge = ({ tone = "gray", children, className }: { tone?: keyof typeof tones; children: React.ReactNode; className?: string }) =>
   <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ring-transparent", tones[tone], className)}>{children}</span>;
@@ -40,7 +40,7 @@ export const StatusBadge = ({ status }: { status: string }) =>
 export const Avatar = ({ name, size = 40, src }: { name: string; size?: number; src?: string | null }) => {
   if (src) return <img src={src} alt={name} width={size} height={size} loading="lazy" className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />;
   const hue = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
-  return <span className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white" style={{ width: size, height: size, fontSize: size * 0.38, background: `linear-gradient(135deg, hsl(${hue} 70% 55%), hsl(${(hue + 50) % 360} 70% 45%))` }}>{initials(name)}</span>;
+  return <span className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-onbrand" style={{ width: size, height: size, fontSize: size * 0.38, background: `linear-gradient(135deg, hsl(${hue} 70% 55%), hsl(${(hue + 50) % 360} 70% 45%))` }}>{initials(name)}</span>;
 };
 
 export const Stars = ({ value, count }: { value: number; count?: number }) => (

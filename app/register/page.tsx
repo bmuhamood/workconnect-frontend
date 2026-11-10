@@ -13,7 +13,7 @@ export default async function Register({ searchParams }: { searchParams: Promise
   const tenant = await currentTenant();
   return (
     <div className="container-x grid place-items-center py-12">
-      <div className="card w-full max-w-xl p-8 animate-fade-up">
+      <div className="card w-full max-w-xl p-8 animate-rise">
         <h1 className="text-2xl font-bold tracking-tight">{id ? "Finish setting up" : "Create your account"}</h1>
         <p className="mb-6 mt-1 text-sm text-slate-500">It takes about a minute. We'll email you a confirmation.</p>
         <RegisterForm mode={AUTH_MODE} tenantName={tenant?.name ?? null} finish={!!id || (await searchParams).finish === "1"} identityEmail={id?.email} />

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Bell, Briefcase } from "lucide-react";
+import { Bell } from "lucide-react";
+import { LogoMark } from "@/components/logo";
 import { getSession } from "@/lib/session";
 import { AUTH_MODE } from "@/lib/auth-mode";
 import { currentTenant } from "@/lib/tenant";
@@ -29,10 +30,10 @@ export async function Navbar() {
     { href: "/about", label: "About" },
   ];
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-[#060913]/70 backdrop-blur-xl">
       <div className="container-x flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2 text-lg font-bold tracking-tight">
-          <span className="grid size-8 place-items-center rounded-xl bg-gradient-to-br from-brand-600 to-fuchsia-500 text-white"><Briefcase className="size-4" /></span>
+          <LogoMark />
           <span>WorkConnect{tenant && <span className="ml-2 hidden rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 sm:inline">{tenant.name}</span>}</span>
         </Link>
         <nav className="hidden items-center gap-1 md:flex">
@@ -43,7 +44,7 @@ export async function Navbar() {
             <>
               <Link href="/notifications" className="relative rounded-xl p-2 text-slate-600 hover:bg-slate-100" aria-label="Notifications">
                 <Bell className="size-5" />
-                {unread > 0 && <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">{unread > 9 ? "9+" : unread}</span>}
+                {unread > 0 && <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-onbrand">{unread > 9 ? "9+" : unread}</span>}
               </Link>
               <UserMenu name={s.name} role={s.role} avatar={<Avatar name={s.name} size={32} />} mode={AUTH_MODE} />
             </>

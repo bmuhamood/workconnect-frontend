@@ -4,6 +4,7 @@ import { and, desc, eq, ilike, or, lte } from "drizzle-orm";
 import { ShieldCheck, MapPin } from "lucide-react";
 import { tdb } from "@/lib/tenant";
 import { workerProfiles, users, categories } from "@/db/schema";
+import { SetupNotice } from "@/components/setup-notice";
 import { PageHeader, Empty, Avatar, Stars, Badge } from "@/components/ui";
 import { ugx, rating } from "@/lib/format";
 
@@ -11,7 +12,8 @@ export const metadata: Metadata = { title: "Find workers" };
 type SP = { q?: string; category?: string; city?: string; verified?: string; max?: string };
 export default async function Workers({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const { list, cats } = await tdb(async (tx) => {
+  let res;
+  try { res = await tdb(async (tx) => {
     const t = sp.q?.trim() ? `%${sp.q.trim().replace(/[%_]/g, "")}%` : null;
     const catOk = sp.category && /^[0-9a-f-]{36}$/i.test(sp.category) ? sp.category : null;
     const where = and(
@@ -23,7 +25,8 @@ export default async function Workers({ searchParams }: { searchParams: Promise<
       eq(workerProfiles.availability, "available"),
     );
     return { cats: await tx.select().from(categories).orderBy(categories.name), list: await tx.select({ id: users.id, first: users.firstName, last: users.lastName, avatar: users.avatarUrl, p: workerProfiles }).from(workerProfiles).innerJoin(users, eq(users.id, workerProfiles.userId)).where(where).orderBy(desc(workerProfiles.verified), desc(workerProfiles.ratingAvg)).limit(60) };
-  });
+  }); } catch (e) { console.error("[page] data load failed:", (e as Error).message.slice(0, 200)); return <SetupNotice what="Workers" />; }
+  const { list, cats } = res;
   return (
     <div className="container-x py-10">
       <PageHeader title="Find workers" subtitle={`${list.length} available ${list.length === 1 ? "worker" : "workers"}`} />
@@ -33,7 +36,7 @@ export default async function Workers({ searchParams }: { searchParams: Promise<
         <input name="city" defaultValue={sp.city} placeholder="City" className="input" />
         <input name="max" type="number" defaultValue={sp.max} placeholder="Max salary" className="input" />
         <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" name="verified" value="1" defaultChecked={sp.verified === "1"} className="size-4 accent-brand-600" />Verified only</label>
-        <button className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Search</button>
+        <button className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-onbrand hover:bg-brand-700">Search</button>
       </form>
       {list.length === 0 ? <Empty title="No workers match your filters" hint="Try widening your search." /> : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
