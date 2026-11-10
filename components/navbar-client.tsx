@@ -22,7 +22,7 @@ export function UserMenu({ name, role, avatar, mode }: { name: string; role: str
             <Link href="/profile" onClick={() => setOpen(false)} className={item}><User className="size-4" />Profile</Link>
             <Link href="/contracts" onClick={() => setOpen(false)} className={item}><FileText className="size-4" />Contracts</Link>
             {role === "employer" && <Link href="/invoices" onClick={() => setOpen(false)} className={item}><Receipt className="size-4" />Invoices</Link>}
-            <button onClick={logout} className={item + " w-full text-rose-600"}><LogOut className="size-4" />Sign out</button>
+            <button onClick={logout} className={item + " w-full text-rose-400"}><LogOut className="size-4" />Sign out</button>
           </div>
         </>
       )}
@@ -40,7 +40,7 @@ export function MobileNav({ links, signedIn, mode }: { links: { href: string; la
       {open && (
         <div className="absolute inset-x-0 top-16 border-b border-slate-200 bg-white p-3 shadow-lg">
           {all.map((l) => <Link key={l.href} href={l.href} onClick={() => setOpen(false)} className="block rounded-lg px-3 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">{l.label}</Link>)}
-          {signedIn && <button onClick={async () => { await signOut(mode); setOpen(false); router.push("/"); router.refresh(); }} className="block w-full rounded-lg px-3 py-3 text-left text-sm font-medium text-rose-600 hover:bg-rose-50">Sign out</button>}
+          {signedIn && <button onClick={async () => { await signOut(mode); setOpen(false); router.push("/"); router.refresh(); }} className="block w-full rounded-lg px-3 py-3 text-left text-sm font-medium text-rose-400 hover:bg-rose-50">Sign out</button>}
         </div>
       )}
     </div>

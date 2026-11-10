@@ -19,7 +19,7 @@ export async function GET() {
     CRON_SECRET: !!e.CRON_SECRET,
     CLOUDINARY: !!cloudinaryConfig(),
   };
-  let database: "ok" | "not_configured" | "unreachable" | "tables_missing_run_db_migrate" | "app_role_missing_run_db_migrate" | "error" = "not_configured";
+  let database: "ok" | "not_configured" | "unreachable" | "tables_missing_run_db_migrate" | "app_role_missing_run_db_migrate" | "cannot_switch_to_app_role" | "error" = "not_configured";
   let tenants: number | null = null;
   if (env.DATABASE_URL) {
     try {
@@ -28,7 +28,12 @@ export async function GET() {
         const t = await rootDb.execute(sql`select count(*)::int as n from tenants`);
         tenants = Number((t.rows?.[0] as { n: number } | undefined)?.n ?? 0);
         const r = await rootDb.execute(sql`select pg_has_role(current_user, 'wc_app', 'member') as ok`);
-        database = (r.rows?.[0] as { ok: boolean } | undefined)?.ok ? "ok" : "app_role_missing_run_db_migrate";
+        if (!(r.rows?.[0] as { ok: boolean } | undefined)?.ok) database = "app_role_missing_run_db_migrate";
+        else {
+          // The exact step every request performs: switch to the restricted role inside a transaction.
+          try { await rootDb.transaction(async (tx) => { await tx.execute(sql`set local role wc_app`); await tx.execute(sql`select count(*) from categories`); }); database = "ok"; }
+          catch { database = "cannot_switch_to_app_role"; }
+        }
       } catch (err) {
         database = /does not exist/i.test(String((err as Error).message) + String((err as { cause?: Error }).cause?.message)) ? "tables_missing_run_db_migrate" : "error";
       }

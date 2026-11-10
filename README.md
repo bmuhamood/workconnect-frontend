@@ -25,7 +25,7 @@ npm run build && npm start
 1. Import the GitHub repo in Vercel (framework: Next.js).
 2. Set env vars from `.env.example` (DATABASE_URL, NEON_AUTH_BASE_URL, NEON_AUTH_COOKIE_SECRET, RESEND_API_KEY, EMAIL_FROM, NEXT_PUBLIC_APP_URL, CRON_SECRET).
 3. Run `npm run db:migrate` once against the production database.
-4. Add your Vercel URL to Neon Auth's trusted origins. Verify your sending domain in Resend.
+4. Add your Vercel URL to Neon Auth's trusted origins. Set `EMAIL_FROM` to an address on your Resend-verified domain (e.g. `notifications@listoq.com`), then sign in as an admin and use **Admin → Send a test email to me**.
 
 ## Tests
 `scripts/test-isolation.mts` (DB-level) and `scripts/e2e.mjs` (HTTP workflow + cross-tenant attacks; needs a running server with local auth).

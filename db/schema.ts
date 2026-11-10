@@ -23,6 +23,9 @@ export const tenants = pgTable("tenants", {
   brandColor: text("brand_color").notNull().default("#4f46e5"),
   serviceFeeBps: integer("service_fee_bps").notNull().default(1000),
   emailFromName: text("email_from_name"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
+  contactAddress: text("contact_address"),
   createdAt: ts("created_at"),
 }, (t) => [uniqueIndex("tenants_slug_uq").on(t.slug), uniqueIndex("tenants_domain_uq").on(t.domain)]);
 
@@ -200,6 +203,7 @@ export const emailOutbox = pgTable("email_outbox", {
   tenantId: tenantCol(),
   toEmail: text("to_email").notNull(),
   toName: text("to_name"),
+  replyTo: text("reply_to"),
   template: text("template").notNull(),
   subject: text("subject").notNull(),
   html: text("html").notNull(),
@@ -212,6 +216,17 @@ export const emailOutbox = pgTable("email_outbox", {
   sentAt: timestamp("sent_at", { withTimezone: true }),
 }, (t) => [index("outbox_status_idx").on(t.status, t.createdAt)]);
 
+/** Messages sent through the public contact form (one inbox per tenant). */
+export const contactMessages = pgTable("contact_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: tenantCol(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  topic: text("topic").notNull(),
+  message: text("message").notNull(),
+  createdAt: ts("created_at"),
+}, (t) => [index("contact_tenant_idx").on(t.tenantId, t.createdAt), index("contact_email_idx").on(t.tenantId, t.email, t.createdAt)]);
+
 /** Dedupes automated follow-ups so a reminder is only sent once per entity/kind. */
 export const followups = pgTable("followups", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -223,5 +238,5 @@ export const followups = pgTable("followups", {
 
 export const TENANT_TABLES = [
   "memberships", "worker_profiles", "employer_profiles", "categories", "jobs", "applications", "contracts",
-  "invoices", "conversations", "messages", "reviews", "notifications", "email_outbox", "followups",
+  "invoices", "conversations", "messages", "reviews", "notifications", "email_outbox", "followups", "contact_messages",
 ] as const;

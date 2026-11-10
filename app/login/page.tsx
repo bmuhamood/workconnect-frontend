@@ -9,7 +9,7 @@ export default async function Login() {
   if (await getSession()) redirect("/dashboard");
   return (
     <div className="container-x grid min-h-[70vh] place-items-center py-12">
-      <div className="card w-full max-w-md p-8 animate-fade-up">
+      <div className="card w-full max-w-md p-8 animate-rise">
         <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
         <p className="mb-6 mt-1 text-sm text-slate-500">Sign in to manage jobs, contracts and payments.</p>
         <LoginForm mode={AUTH_MODE} />

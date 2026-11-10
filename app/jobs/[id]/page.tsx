@@ -39,7 +39,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
               <div className="space-y-3">{apps.map(({ a, first, last, w }) => (
                 <div key={a.id} className="card p-5">
                   <div className="flex flex-wrap items-center gap-3">
-                    <Avatar name={`${first} ${last}`} /><div className="min-w-0 flex-1"><Link href={`/workers/${a.workerId}`} className="font-semibold hover:text-brand-600">{first} {last}</Link><div className="text-sm text-slate-500">{w?.profession} · {w?.experienceYears ?? 0} yrs{a.expectedSalary ? ` · asks ${ugx(a.expectedSalary)}` : ""}</div></div>
+                    <Avatar name={`${first} ${last}`} /><div className="min-w-0 flex-1"><Link href={`/workers/${a.workerId}`} className="font-semibold hover:text-accent-strong">{first} {last}</Link><div className="text-sm text-slate-500">{w?.profession} · {w?.experienceYears ?? 0} yrs{a.expectedSalary ? ` · asks ${ugx(a.expectedSalary)}` : ""}</div></div>
                     <StatusBadge status={a.status} />
                   </div>
                   {a.coverLetter && <p className="mt-3 whitespace-pre-line text-sm text-slate-600">{a.coverLetter}</p>}
@@ -59,7 +59,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
       <aside className="lg:sticky lg:top-24 lg:self-start">
         <div className="card p-6">
           <div className="text-sm text-slate-500">Monthly salary</div>
-          <div className="text-2xl font-bold text-brand-700">{ugxRange(j.salaryMin, j.salaryMax)}</div>
+          <div className="text-2xl font-bold text-accent">{ugxRange(j.salaryMin, j.salaryMax)}</div>
           <div className="mt-5">
             {!s ? <div className="space-y-2"><LinkButton href="/login" className="w-full">Sign in to apply</LinkButton><LinkButton href="/register" variant="secondary" className="w-full">Create account</LinkButton></div>
               : s.role !== "worker" ? <p className="text-sm text-slate-500">{owner ? "This is your job posting." : "Only workers can apply to jobs."}</p>
