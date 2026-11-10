@@ -16,7 +16,7 @@ export default async function WorkerPage({ params, searchParams }: { params: Pro
   if (!isId(id)) notFound();
   const s = await getSession();
   const d = await tdb(async (tx) => {
-    const [w] = await tx.select({ first: users.firstName, last: users.lastName, p: workerProfiles }).from(workerProfiles).innerJoin(users, eq(users.id, workerProfiles.userId)).where(eq(workerProfiles.userId, id)).limit(1);
+    const [w] = await tx.select({ first: users.firstName, last: users.lastName, avatar: users.avatarUrl, p: workerProfiles }).from(workerProfiles).innerJoin(users, eq(users.id, workerProfiles.userId)).where(eq(workerProfiles.userId, id)).limit(1);
     if (!w) return null;
     const revs = await tx.select({ r: reviews, first: users.firstName, last: users.lastName }).from(reviews).innerJoin(users, eq(users.id, reviews.reviewerId)).where(eq(reviews.revieweeId, id)).orderBy(desc(reviews.createdAt)).limit(20);
     const job = isId(sp.job) ? (await tx.select().from(jobs).where(eq(jobs.id, sp.job!)).limit(1))[0] ?? null : null;
@@ -30,7 +30,7 @@ export default async function WorkerPage({ params, searchParams }: { params: Pro
     <div className="container-x grid gap-8 py-10 lg:grid-cols-[1fr_380px]">
       <div>
         <div className="card flex flex-wrap items-center gap-5 p-6">
-          <Avatar name={name} size={72} />
+          <Avatar name={name} src={w.avatar} size={72} />
           <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-bold">{name}</h1>{w.p.verified && <Badge tone="green"><ShieldCheck className="size-3" />Verified</Badge>}</div><p className="text-slate-500">{w.p.profession || "Worker"}</p><div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500"><Stars value={Number(rating(w.p.ratingAvg))} count={w.p.reviewsCount} /><span className="inline-flex items-center gap-1"><MapPin className="size-4" />{w.p.city}</span><span className="inline-flex items-center gap-1"><Briefcase className="size-4" />{w.p.experienceYears} yrs</span>{w.p.languages.length > 0 && <span className="inline-flex items-center gap-1"><Languages className="size-4" />{w.p.languages.join(", ")}</span>}</div></div>
         </div>
         <div className="card mt-4 p-6"><h2 className="mb-2 font-semibold">About</h2><p className="whitespace-pre-line text-slate-700">{w.p.bio || "This worker hasn't added a bio yet."}</p>{w.p.skills.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{w.p.skills.map((k) => <Badge key={k} tone="blue">{k}</Badge>)}</div>}</div>

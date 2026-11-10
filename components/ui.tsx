@@ -37,7 +37,8 @@ const statusTone: Record<string, keyof typeof tones> = {
 export const StatusBadge = ({ status }: { status: string }) =>
   <Badge tone={statusTone[status] ?? "gray"}>{status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</Badge>;
 
-export const Avatar = ({ name, size = 40 }: { name: string; size?: number }) => {
+export const Avatar = ({ name, size = 40, src }: { name: string; size?: number; src?: string | null }) => {
+  if (src) return <img src={src} alt={name} width={size} height={size} loading="lazy" className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />;
   const hue = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
   return <span className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white" style={{ width: size, height: size, fontSize: size * 0.38, background: `linear-gradient(135deg, hsl(${hue} 70% 55%), hsl(${(hue + 50) % 360} 70% 45%))` }}>{initials(name)}</span>;
 };

@@ -10,7 +10,7 @@ export default async function Home() {
   const data = await tdb(async (tx, tenant) => ({
     tenant,
     cats: await tx.select().from(categories).orderBy(categories.name),
-    workers: await tx.select({ id: users.id, first: users.firstName, last: users.lastName, p: workerProfiles }).from(workerProfiles).innerJoin(users, eq(users.id, workerProfiles.userId)).orderBy(desc(workerProfiles.verified), desc(workerProfiles.ratingAvg)).limit(4),
+    workers: await tx.select({ id: users.id, first: users.firstName, last: users.lastName, avatar: users.avatarUrl, p: workerProfiles }).from(workerProfiles).innerJoin(users, eq(users.id, workerProfiles.userId)).orderBy(desc(workerProfiles.verified), desc(workerProfiles.ratingAvg)).limit(4),
     jobs: await tx.select().from(jobs).where(eq(jobs.status, "open")).orderBy(desc(jobs.createdAt)).limit(3),
     stats: (await tx.select({ w: sql<number>`count(*)::int` }).from(workerProfiles))[0],
   })).catch(() => null);
@@ -45,7 +45,7 @@ export default async function Home() {
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {data.workers.map((w) => (
             <Link key={w.id} href={`/workers/${w.id}`} className="card p-5 transition hover:-translate-y-0.5 hover:shadow-md">
-              <div className="flex items-center gap-3"><Avatar name={`${w.first} ${w.last}`} size={44} /><div><div className="font-semibold">{w.first} {w.last}</div><div className="text-sm text-slate-500">{w.p.profession}</div></div></div>
+              <div className="flex items-center gap-3"><Avatar name={`${w.first} ${w.last}`} src={w.avatar} size={44} /><div><div className="font-semibold">{w.first} {w.last}</div><div className="text-sm text-slate-500">{w.p.profession}</div></div></div>
               <div className="mt-4 flex items-center justify-between"><Stars value={Number(rating(w.p.ratingAvg))} count={w.p.reviewsCount} />{w.p.verified && <Badge tone="green"><ShieldCheck className="size-3" />Verified</Badge>}</div>
             </Link>
           ))}

@@ -32,6 +32,7 @@ export const users = pgTable("users", {
   authId: text("auth_id").notNull(), // Neon Auth user id (or local dev id)
   email: text("email").notNull(),
   phone: text("phone"),
+  avatarUrl: text("avatar_url"),
   passwordHash: text("password_hash"), // local dev auth only; null with Neon Auth
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),

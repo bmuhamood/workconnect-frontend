@@ -15,6 +15,13 @@
       "when": 1794254557871,
       "tag": "0001_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794286738729,
+      "tag": "0002_avatar",
+      "breakpoints": true
     }
   ]
 }

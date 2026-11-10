@@ -119,6 +119,17 @@ check("tenant entry link sets cookie + redirects", (await anon.req("/t/kampala-h
 const cron = await anon.req("/api/cron/emails", { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
 check("cron rejects missing secret", (await anon.req("/api/cron/emails")).status === 401);
 check("cron runs with secret", cron.status === 200, JSON.stringify(cron.json));
+
+// 9. Cloudinary uploads (signed payload + avatar URL validation)
+const sg = await worker.c.req("/api/uploads/sign", { method: "POST" });
+check("upload signature issued in tenant folder, secret not exposed", sg.status === 200 && /workconnect\/[0-9a-f-]{36}\/avatars/.test(sg.json?.folder ?? "") && !!sg.json?.signature && !JSON.stringify(sg.json).includes(process.env.CLOUDINARY_API_SECRET ?? "@@none@@"));
+check("upload signing requires sign-in", (await anon.req("/api/uploads/sign", { method: "POST" })).status === 401);
+const good = `https://res.cloudinary.com/${sg.json?.cloudName}/image/upload/v1/${sg.json?.folder}/me.jpg`;
+check("avatar accepted from own tenant folder", (await worker.c.req("/api/profile/avatar", { method: "PATCH", body: { url: good } })).status === 200);
+check("avatar from another tenant's folder rejected", (await worker.c.req("/api/profile/avatar", { method: "PATCH", body: { url: good.replace(/workconnect\/[0-9a-f-]{36}/, "workconnect/00000000-0000-0000-0000-000000000000") } })).status === 400);
+check("avatar from arbitrary host rejected", (await worker.c.req("/api/profile/avatar", { method: "PATCH", body: { url: "https://evil.example/x.jpg" } })).status === 400);
+const shown = await anon.req("/workers/" + workerId, { headers: { cookie: `wc_tenant=${slug}` } });
+check("profile photo renders on the worker page", shown.status === 200 && shown.text.includes("/me.jpg"));
 console.log("SLUG=" + slug);
 console.log(failed ? `\n${failed} FAILED` : "\nAll end-to-end checks passed");
 process.exit(failed ? 1 : 0);

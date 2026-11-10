@@ -5,12 +5,13 @@ import { requireSession } from "@/lib/session";
 import { workerProfiles, employerProfiles, users, categories } from "@/db/schema";
 import { PageHeader, Badge } from "@/components/ui";
 import { AjaxForm, Field } from "@/components/ajax-form";
+import { AvatarUpload } from "@/components/avatar-upload";
 
 export const metadata: Metadata = { title: "Profile" };
 export default async function Profile() {
   const s = await requireSession();
   const d = await tdb(async (tx) => ({
-    u: (await tx.select({ first: users.firstName, last: users.lastName, email: users.email }).from(users).where(eq(users.id, s.userId)))[0],
+    u: (await tx.select({ first: users.firstName, last: users.lastName, email: users.email, avatar: users.avatarUrl }).from(users).where(eq(users.id, s.userId)))[0],
     w: s.role === "worker" ? (await tx.select().from(workerProfiles).where(eq(workerProfiles.userId, s.userId)))[0] : null,
     e: s.role === "employer" ? (await tx.select().from(employerProfiles).where(eq(employerProfiles.userId, s.userId)))[0] : null,
     cats: await tx.select().from(categories).orderBy(categories.name),
@@ -18,6 +19,7 @@ export default async function Profile() {
   return (
     <div className="container-x max-w-2xl py-10">
       <PageHeader title="Your profile" subtitle={d.u.email} action={d.w?.verified ? <Badge tone="green">Verified</Badge> : undefined} />
+      <div className="card mb-4 p-6"><AvatarUpload name={`${d.u.first} ${d.u.last}`} src={d.u.avatar} /></div>
       <div className="card p-6">
         <AjaxForm url="/api/profile" success="Profile saved">
           <div className="grid gap-4 sm:grid-cols-2"><Field label="First name"><input name="firstName" required defaultValue={d.u.first} className="input" /></Field><Field label="Last name"><input name="lastName" required defaultValue={d.u.last} className="input" /></Field></div>

@@ -22,7 +22,7 @@ export default async function Workers({ searchParams }: { searchParams: Promise<
       t ? or(ilike(workerProfiles.profession, t), ilike(workerProfiles.bio, t), ilike(users.firstName, t), ilike(users.lastName, t)) : undefined,
       eq(workerProfiles.availability, "available"),
     );
-    return { cats: await tx.select().from(categories).orderBy(categories.name), list: await tx.select({ id: users.id, first: users.firstName, last: users.lastName, p: workerProfiles }).from(workerProfiles).innerJoin(users, eq(users.id, workerProfiles.userId)).where(where).orderBy(desc(workerProfiles.verified), desc(workerProfiles.ratingAvg)).limit(60) };
+    return { cats: await tx.select().from(categories).orderBy(categories.name), list: await tx.select({ id: users.id, first: users.firstName, last: users.lastName, avatar: users.avatarUrl, p: workerProfiles }).from(workerProfiles).innerJoin(users, eq(users.id, workerProfiles.userId)).where(where).orderBy(desc(workerProfiles.verified), desc(workerProfiles.ratingAvg)).limit(60) };
   });
   return (
     <div className="container-x py-10">
@@ -39,7 +39,7 @@ export default async function Workers({ searchParams }: { searchParams: Promise<
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {list.map((w) => (
             <Link key={w.id} href={`/workers/${w.id}`} className="card p-5 transition hover:-translate-y-0.5 hover:shadow-md">
-              <div className="flex items-center gap-3"><Avatar name={`${w.first} ${w.last}`} size={48} /><div className="min-w-0 flex-1"><div className="truncate font-semibold">{w.first} {w.last}</div><div className="truncate text-sm text-slate-500">{w.p.profession || "Worker"}</div></div>{w.p.verified && <Badge tone="green"><ShieldCheck className="size-3" />Verified</Badge>}</div>
+              <div className="flex items-center gap-3"><Avatar name={`${w.first} ${w.last}`} src={w.avatar} size={48} /><div className="min-w-0 flex-1"><div className="truncate font-semibold">{w.first} {w.last}</div><div className="truncate text-sm text-slate-500">{w.p.profession || "Worker"}</div></div>{w.p.verified && <Badge tone="green"><ShieldCheck className="size-3" />Verified</Badge>}</div>
               <div className="mt-4 flex flex-wrap gap-1.5">{w.p.skills.slice(0, 3).map((k) => <Badge key={k}>{k}</Badge>)}</div>
               <div className="mt-4 flex items-center justify-between text-sm"><Stars value={Number(rating(w.p.ratingAvg))} count={w.p.reviewsCount} /><span className="inline-flex items-center gap-1 text-slate-500"><MapPin className="size-4" />{w.p.city}</span></div>
               <div className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-500">{w.p.experienceYears} yrs exp · <span className="font-medium text-slate-800">{w.p.expectedSalary ? ugx(w.p.expectedSalary) : "Salary negotiable"}</span></div>
