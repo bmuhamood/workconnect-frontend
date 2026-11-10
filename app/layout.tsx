@@ -1,33 +1,25 @@
-// app/layout.tsx
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import ClientLayout from '@/components/ClientLayout';
-import Header from '@/components/layout/navbar';
-import Footer from '@/components/ui/footer';
-
-const inter = Inter({ subsets: ['latin'] });
+import type { Metadata, Viewport } from "next";
+import "./globals.css";
+import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
+import { ToastHost } from "@/components/toast-host";
 
 export const metadata: Metadata = {
-  title: 'WorkConnect - Uganda\'s #1 Job Matching Platform',
-  description: 'Connecting verified skilled workers with trusted employers across Uganda',
+  title: { default: "WorkConnect — Hire trusted workers in Uganda", template: "%s · WorkConnect" },
+  description: "Find verified house help, nannies, drivers, cooks and more — with contracts, payments and reviews built in.",
 };
+// Every page depends on the signed-in user / tenant, so render per request.
+export const dynamic = "force-dynamic";
+export const viewport: Viewport = { themeColor: "#4f46e5" };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} antialiased`} suppressHydrationWarning>
-        <ClientLayout>
-          <Header />
-          <main className="min-h-screen pt-18"> {/* Add pt-16 (64px) for standard header height */}
-            {children}
-          </main>
-          <Footer />
-        </ClientLayout>
+    <html lang="en">
+      <body className="flex min-h-screen flex-col">
+        <Navbar />
+        <main className="flex-1">{children}</main>
+        <Footer />
+        <ToastHost />
       </body>
     </html>
   );
