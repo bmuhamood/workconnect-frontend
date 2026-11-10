@@ -13,6 +13,13 @@ export type Tenant = typeof tenants.$inferSelect;
  * signed in -> their active tenant; else custom domain -> ?t= cookie -> DEFAULT_TENANT_SLUG.
  */
 export const currentTenant = cache(async (): Promise<Tenant | null> => {
+  try { return await resolveTenant(); } catch (e) {
+    console.error("[tenant] could not resolve tenant (is the database migrated? see /api/health):", (e as Error).message.slice(0, 160));
+    return null;
+  }
+});
+
+async function resolveTenant(): Promise<Tenant | null> {
   const s = await getSession();
   if (s) return (await rootDb.select().from(tenants).where(eq(tenants.id, s.tenantId)).limit(1))[0] ?? null;
   const host = ((await headers()).get("host") ?? "").split(":")[0].toLowerCase();
@@ -23,7 +30,7 @@ export const currentTenant = cache(async (): Promise<Tenant | null> => {
   const slug = (await cookies()).get(TENANT_COOKIE)?.value ?? process.env.DEFAULT_TENANT_SLUG;
   if (!slug) return (await rootDb.select().from(tenants).limit(1))[0] ?? null;
   return (await rootDb.select().from(tenants).where(eq(tenants.slug, slug)).limit(1))[0] ?? null;
-});
+}
 
 /** Tenant-scoped DB access for server components (works signed out for public marketplace pages). */
 export async function tdb<T>(fn: (tx: Tx, tenant: Tenant) => Promise<T>): Promise<T> {

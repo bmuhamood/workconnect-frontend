@@ -17,12 +17,21 @@ export const verifyPassword = (p: string, h: string) => bcrypt.compare(p, h);
 
 /** Who is signed in (identity only; tenant/role come from lib/session). */
 export async function getIdentity(): Promise<Identity | null> {
-  assertAuthConfigured();
+  try { assertAuthConfigured(); } catch (e) {
+    // Misconfigured deployment: keep public pages working (signed-out) and point at /api/health.
+    console.error("[auth]", (e as Error).message);
+    return null;
+  }
   if (AUTH_MODE === "neon") {
-    const { neonAuth } = await import("@/lib/neon-auth");
-    const { data } = await neonAuth.getSession();
-    const u = data?.user;
-    return u ? { authId: u.id, email: u.email.toLowerCase(), name: u.name ?? "" } : null;
+    try {
+      const { neonAuth } = await import("@/lib/neon-auth");
+      const { data } = await neonAuth.getSession();
+      const u = data?.user;
+      return u ? { authId: u.id, email: u.email.toLowerCase(), name: u.name ?? "" } : null;
+    } catch (e) {
+      console.error("[auth] Neon Auth session lookup failed (check NEON_AUTH_BASE_URL / NEON_AUTH_COOKIE_SECRET):", (e as Error).message);
+      return null;
+    }
   }
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;

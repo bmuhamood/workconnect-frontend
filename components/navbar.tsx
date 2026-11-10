@@ -10,12 +10,18 @@ import { LinkButton, Avatar } from "@/components/ui";
 import { UserMenu, MobileNav } from "@/components/navbar-client";
 
 export async function Navbar() {
-  const s = await getSession();
-  const tenant = await currentTenant();
+  let s: Awaited<ReturnType<typeof getSession>> = null;
+  let tenant: Awaited<ReturnType<typeof currentTenant>> = null;
   let unread = 0;
-  if (s) {
-    const [r] = await db.select({ n: count() }).from(notifications).where(and(eq(notifications.userId, s.userId), isNull(notifications.readAt)));
-    unread = r?.n ?? 0;
+  try {
+    s = await getSession();
+    tenant = await currentTenant();
+    if (s) {
+      const [r] = await db.select({ n: count() }).from(notifications).where(and(eq(notifications.userId, s.userId), isNull(notifications.readAt)));
+      unread = r?.n ?? 0;
+    }
+  } catch (e) {
+    console.error("[navbar] could not load session/tenant:", (e as Error).message);
   }
   const links = [
     { href: "/jobs", label: "Find jobs" }, { href: "/workers", label: "Find workers" },
