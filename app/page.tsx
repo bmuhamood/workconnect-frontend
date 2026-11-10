@@ -5,6 +5,8 @@ import { tdb } from "@/lib/tenant";
 import { categories, jobs, workerProfiles, users } from "@/db/schema";
 import { LinkButton, Avatar, Stars, Badge } from "@/components/ui";
 import { MatchNetwork } from "@/components/match-network";
+import { ServicesExplorer } from "@/components/services-explorer";
+import { RolesMarquee } from "@/components/roles-marquee";
 import { ugxRange, rating } from "@/lib/format";
 
 const STEPS = [
@@ -41,7 +43,7 @@ export default async function Home() {
         <div className="animate-rise">
           <Badge tone="blue" className="mb-6"><span className="size-1.5 rounded-full bg-signal" />{data.tenant.name}</Badge>
           <h1 className="max-w-xl text-4xl font-bold leading-[1.05] sm:text-6xl">Hire people you can trust. We handle the paperwork.</h1>
-          <p className="mt-6 max-w-lg text-lg leading-relaxed text-slate-600">Verified house help, nannies, drivers and cooks, with contracts, monthly invoices and reviews built in.</p>
+          <p className="mt-6 max-w-lg text-lg leading-relaxed text-slate-600">Recruitment and workforce management in one place: sourcing, contracts, payroll, leave and ongoing HR support.</p>
           <form action="/workers" className="card mt-9 flex max-w-lg items-center gap-2 p-2">
             <Search className="ml-3 size-5 shrink-0 text-slate-400" />
             <input name="q" aria-label="Search workers" placeholder="Try nanny, driver or cook" className="w-full bg-transparent py-2 text-slate-900 outline-none placeholder:text-slate-400" />
@@ -54,6 +56,22 @@ export default async function Home() {
           </dl>
         </div>
         <MatchNetwork people={net} />
+      </section>
+
+      <section id="services" className="container-x scroll-mt-24 pb-20">
+        <div className="max-w-2xl">
+          <h2 className="text-2xl font-bold sm:text-4xl">One partner from the first interview to monthly payroll</h2>
+          <p className="mt-4 text-slate-600">WorkConnect finds the right people, signs them up properly, pays them on time and keeps the HR side running, so you can focus on your business.</p>
+        </div>
+        <div className="mt-10"><ServicesExplorer /></div>
+      </section>
+
+      <section className="pb-20">
+        <div className="container-x mb-8 max-w-2xl">
+          <h2 className="text-2xl font-bold sm:text-3xl">Whoever you need to hire</h2>
+          <p className="mt-3 text-slate-600">General workers, cleaners, drivers, warehouse staff, technicians, supervisors, administrators, accountants, IT professionals, managers and other skilled professionals. We support your recruitment and workforce management needs.</p>
+        </div>
+        <RolesMarquee />
       </section>
 
       <section className="container-x pb-20">

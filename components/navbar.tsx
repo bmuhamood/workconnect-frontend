@@ -25,7 +25,7 @@ export async function Navbar() {
     console.error("[navbar] could not load session/tenant:", (e as Error).message);
   }
   const links = [
-    { href: "/jobs", label: "Find jobs" }, { href: "/workers", label: "Find workers" },
+    { href: "/#services", label: "Services" }, { href: "/jobs", label: "Find jobs" }, { href: "/workers", label: "Find workers" },
     ...(s ? [{ href: "/dashboard", label: "Dashboard" }, { href: "/messages", label: "Messages" }, ...(s.role === "admin" ? [{ href: "/admin", label: "Admin" }] : [])] : []),
     { href: "/about", label: "About" },
   ];
