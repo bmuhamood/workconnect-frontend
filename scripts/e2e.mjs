@@ -136,6 +136,32 @@ check("worker cannot send test emails", (await worker.c.req("/api/admin/test-ema
 await new Promise((r) => setTimeout(r, 2500));
 const adm = await agency.c.req("/admin");
 check("test email appears as sent in the admin outbox", /Test email from WorkConnect/.test(adm.text) && /Completed/.test(adm.text));
+
+// 11. Contact page + inbox (public form, honeypot, rate limit, tenant isolation, emails)
+const visitor = new Client(); visitor.jar.wc_tenant = slug;
+const mark = `needs-help-${run}`;
+check("contact page renders", (await visitor.req("/contact")).status === 200);
+check("contact form validates input", (await visitor.req("/api/contact", { method: "POST", body: { name: "A", email: "nope", topic: "General question", message: "short" } })).status === 400);
+check("contact form rejects unknown topic", (await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "Spam", message: "x".repeat(20) } })).status === 400);
+const sent = await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "I want to hire staff", message: `We need two drivers and a cook. ${mark}` } });
+check("visitor sends a contact message (no sign-in)", sent.status === 200);
+const bot = await visitor.req("/api/contact", { method: "POST", body: { name: "Bot Bot", email: `bot.${run}@e2e.test`, topic: "General question", message: "buy cheap pills now please", website: "http://spam.example" } });
+check("honeypot: bots get 200 but nothing is stored", bot.status === 200);
+await new Promise((r) => setTimeout(r, 2500));
+const inbox = await agency.c.req("/admin");
+check("admin inbox shows the message", /We need two drivers and a cook/.test(inbox.text) && inbox.text.includes(`v.${run}@e2e.test`));
+check("honeypot message never reached the inbox", !inbox.text.includes("buy cheap pills"));
+check("admin email carries Reply-To the visitor + visitor gets a receipt", /New contact message: I want to hire staff/.test(inbox.text) && /We received your message/.test(inbox.text));
+for (let k = 0; k < 2; k++) await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "General question", message: `Another message number ${k} please` } });
+check("rate limit: 4th message in an hour from the same email -> 429", (await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "General question", message: "Yet another one please answer" } })).status === 429);
+const otherAdmin = new Client(); otherAdmin.jar.wc_tenant = "kampala-homes";
+await otherAdmin.req("/api/local-auth/login", { method: "POST", body: { email: "admin@kampala-homes.ug", password: "Password123!" } });
+const otherInbox = await otherAdmin.req("/admin");
+check("another tenant's admin cannot see our contact messages", otherInbox.status === 200 && !otherInbox.text.includes(mark) && !otherInbox.text.includes(`v.${run}@e2e.test`));
+check("admin saves contact details", (await agency.c.req("/api/admin/tenant", { method: "PATCH", body: { name: slugBase, brandColor: "#4f46e5", serviceFeePercent: 10, contactEmail: "hello@listoq.com", contactPhone: "+256 700 123 456", contactAddress: "Plot 1, Kampala Road" } })).status === 200);
+const cp = await visitor.req("/contact");
+check("contact page shows the organisation's details", /hello@listoq\.com/.test(cp.text) && /Kampala Road/.test(cp.text));
+check("worker cannot change contact details", (await worker.c.req("/api/admin/tenant", { method: "PATCH", body: { name: "x", brandColor: "#000000", serviceFeePercent: 1 } })).status === 403);
 console.log("SLUG=" + slug);
 console.log(failed ? `\n${failed} FAILED` : "\nAll end-to-end checks passed");
 process.exit(failed ? 1 : 0);

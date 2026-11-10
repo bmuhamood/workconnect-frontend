@@ -47,6 +47,13 @@ check("tenant role cannot read password hashes", pwBlocked);
 const none = await rootDb.transaction(async (tx) => { const { sql } = await import("drizzle-orm"); await tx.execute(sql`set local role wc_app`); return (await tx.select().from(memberships)).length; });
 check("no tenant context returns zero rows (fail closed)", none === 0);
 
+// contact inbox is tenant-isolated
+const { contactMessages } = await import("../db/schema");
+await rootDb.insert(contactMessages).values([{ tenantId: A.id, name: "n", email: "a@a.test", topic: "t", message: "message for A" }, { tenantId: B.id, name: "n", email: "b@b.test", topic: "t", message: "message for B" }]);
+const cA = await withTenant({ tenantId: A.id }, (tx) => tx.select().from(contactMessages));
+const cB = await withTenant({ tenantId: B.id }, (tx) => tx.select().from(contactMessages));
+check("contact inbox: each tenant sees only its own messages", cA.every((m) => m.tenantId === A.id) && cB.every((m) => m.tenantId === B.id) && cA.length >= 1 && cB.length >= 1);
+await rootDb.delete(contactMessages).where(eq(contactMessages.topic, "t"));
 await rootDb.delete(notifications).where(eq(notifications.title, "t"));
 console.log(failed ? `\n${failed} FAILED` : "\nAll isolation checks passed");
 process.exit(failed ? 1 : 0);

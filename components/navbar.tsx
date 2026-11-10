@@ -27,7 +27,7 @@ export async function Navbar() {
   const links = [
     { href: "/#services", label: "Services" }, { href: "/jobs", label: "Find jobs" }, { href: "/workers", label: "Find workers" },
     ...(s ? [{ href: "/dashboard", label: "Dashboard" }, { href: "/messages", label: "Messages" }, ...(s.role === "admin" ? [{ href: "/admin", label: "Admin" }] : [])] : []),
-    { href: "/about", label: "About" },
+    { href: "/about", label: "About" }, { href: "/contact", label: "Contact" },
   ];
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-[#060913]/70 backdrop-blur-xl">

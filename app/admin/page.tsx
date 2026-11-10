@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { desc, eq } from "drizzle-orm";
 import { tdb } from "@/lib/tenant";
 import { requireSession } from "@/lib/session";
-import { memberships, users, workerProfiles, emailOutbox, tenants } from "@/db/schema";
+import { memberships, users, workerProfiles, emailOutbox, tenants, contactMessages } from "@/db/schema";
 import { PageHeader, Badge, StatusBadge } from "@/components/ui";
 import { AjaxForm, Field } from "@/components/ajax-form";
 import { ActionButton } from "@/components/action-button";
@@ -15,6 +15,7 @@ export default async function Admin() {
   const d = await tdb(async (tx) => ({
     t: (await tx.select().from(tenants))[0],
     members: await tx.select({ id: users.id, first: users.firstName, last: users.lastName, email: users.email, role: memberships.role, verified: workerProfiles.verified }).from(memberships).innerJoin(users, eq(users.id, memberships.userId)).leftJoin(workerProfiles, eq(workerProfiles.userId, memberships.userId)).orderBy(desc(memberships.createdAt)),
+    inbox: await tx.select().from(contactMessages).orderBy(desc(contactMessages.createdAt)).limit(10),
     mails: await tx.select().from(emailOutbox).orderBy(desc(emailOutbox.createdAt)).limit(15),
   }));
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "";
@@ -27,6 +28,8 @@ export default async function Admin() {
             <Field label="Name"><input name="name" required defaultValue={d.t.name} className="input" /></Field>
             <div className="grid gap-4 sm:grid-cols-2"><Field label="Brand colour"><input name="brandColor" type="color" defaultValue={d.t.brandColor} className="input !h-11 !p-1" /></Field><Field label="Service fee (%)"><input name="serviceFeePercent" type="number" step="0.5" min={0} max={50} defaultValue={d.t.serviceFeeBps / 100} className="input" /></Field></div>
             <Field label="Email sender name"><input name="emailFromName" defaultValue={d.t.emailFromName ?? ""} className="input" /></Field>
+            <div className="grid gap-4 sm:grid-cols-2"><Field label="Contact email (shown on Contact page)"><input name="contactEmail" type="email" defaultValue={d.t.contactEmail ?? ""} className="input" /></Field><Field label="Contact phone"><input name="contactPhone" defaultValue={d.t.contactPhone ?? ""} className="input" /></Field></div>
+            <Field label="Address"><input name="contactAddress" defaultValue={d.t.contactAddress ?? ""} className="input" /></Field>
           </AjaxForm></div>
         <div className="card p-6"><h2 className="mb-4 font-semibold">Send a marketing email</h2>
           <AjaxForm url="/api/admin/campaigns" submit="Send to opted-in members" success="Campaign queued" reset>
@@ -35,6 +38,8 @@ export default async function Admin() {
             <Field label="Message"><textarea name="message" required rows={5} className="input" /></Field>
           </AjaxForm></div>
       </div>
+      <h2 className="mb-3 mt-10 text-lg font-bold">Contact inbox ({d.inbox.length})</h2>
+      <div className="card divide-y divide-slate-100">{d.inbox.length === 0 && <p className="p-6 text-sm text-slate-400">No messages yet. They arrive here and by email.</p>}{d.inbox.map((m) => <div key={m.id} className="p-4 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><div className="font-medium">{m.name} <a className="font-normal text-accent hover:underline" href={`mailto:${m.email}?subject=${encodeURIComponent("Re: " + m.topic)}`}>{m.email}</a></div><div className="text-xs text-slate-400">{m.topic} · {timeAgo(m.createdAt)}</div></div><p className="mt-2 whitespace-pre-line text-slate-600">{m.message}</p></div>)}</div>
       <h2 className="mb-3 mt-10 text-lg font-bold">Members ({d.members.length})</h2>
       <div className="card overflow-x-auto"><table className="w-full min-w-[600px] text-sm"><tbody className="divide-y divide-slate-100">{d.members.map((m) => (
         <tr key={m.id}><td className="p-4"><div className="font-medium">{m.first} {m.last}</div><div className="text-xs text-slate-400">{m.email}</div></td><td><Badge tone={m.role === "admin" ? "blue" : "gray"}>{m.role}</Badge>{m.role === "worker" && (m.verified ? <Badge tone="green" className="ml-1">Verified</Badge> : null)}</td>

@@ -20,8 +20,8 @@ export const brandOf = (t: TenantBrand): Brand => ({ name: t.name, color: t.bran
 export { templates };
 
 /** Queue an email inside the current tenant transaction. Delivery happens after the response (see `flushOutbox`). */
-export async function queueEmail(tx: Tx, to: { email: string; name?: string }, r: Rendered, template: string) {
-  await tx.insert(emailOutbox).values({ toEmail: to.email, toName: to.name ?? null, template, subject: r.subject, html: r.html, text: r.text });
+export async function queueEmail(tx: Tx, to: { email: string; name?: string }, r: Rendered, template: string, opts: { replyTo?: string } = {}) {
+  await tx.insert(emailOutbox).values({ toEmail: to.email, toName: to.name ?? null, replyTo: opts.replyTo ?? null, template, subject: r.subject, html: r.html, text: r.text });
 }
 
 type Row = typeof emailOutbox.$inferSelect;
@@ -31,7 +31,7 @@ async function deliver(row: Row, from: string, headers?: Record<string, string>)
   if (!key) return { ok: false, error: "No email provider configured (set RESEND_API_KEY and EMAIL_FROM)" };
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: [row.toName ? `${row.toName} <${row.toEmail}>` : row.toEmail], subject: row.subject, html: row.html, text: row.text, headers }),
+    body: JSON.stringify({ from, to: [row.toName ? `${row.toName} <${row.toEmail}>` : row.toEmail], subject: row.subject, html: row.html, text: row.text, headers, ...(row.replyTo ? { reply_to: row.replyTo } : {}) }),
   });
   const json = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
   return res.ok ? { ok: true, id: json.id } : { ok: false, error: json.message ?? `HTTP ${res.status}` };
