@@ -130,6 +130,12 @@ check("avatar from another tenant's folder rejected", (await worker.c.req("/api/
 check("avatar from arbitrary host rejected", (await worker.c.req("/api/profile/avatar", { method: "PATCH", body: { url: "https://evil.example/x.jpg" } })).status === 400);
 const shown = await anon.req("/workers/" + workerId, { headers: { cookie: `wc_tenant=${slug}` } });
 check("profile photo renders on the worker page", shown.status === 200 && shown.text.includes("/me.jpg"));
+// 10. Test email (log transport marks it sent; with Resend it would show provider errors here)
+check("admin can send a test email", (await agency.c.req("/api/admin/test-email", { method: "POST" })).status === 200);
+check("worker cannot send test emails", (await worker.c.req("/api/admin/test-email", { method: "POST" })).status === 403);
+await new Promise((r) => setTimeout(r, 2500));
+const adm = await agency.c.req("/admin");
+check("test email appears as sent in the admin outbox", /Test email from WorkConnect/.test(adm.text) && /Completed/.test(adm.text));
 console.log("SLUG=" + slug);
 console.log(failed ? `\n${failed} FAILED` : "\nAll end-to-end checks passed");
 process.exit(failed ? 1 : 0);

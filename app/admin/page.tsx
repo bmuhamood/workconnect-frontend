@@ -6,6 +6,7 @@ import { memberships, users, workerProfiles, emailOutbox, tenants } from "@/db/s
 import { PageHeader, Badge, StatusBadge } from "@/components/ui";
 import { AjaxForm, Field } from "@/components/ajax-form";
 import { ActionButton } from "@/components/action-button";
+import { TestEmailButton } from "@/components/test-email-button";
 import { timeAgo } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Admin" };
@@ -38,7 +39,7 @@ export default async function Admin() {
       <div className="card overflow-x-auto"><table className="w-full min-w-[600px] text-sm"><tbody className="divide-y divide-slate-100">{d.members.map((m) => (
         <tr key={m.id}><td className="p-4"><div className="font-medium">{m.first} {m.last}</div><div className="text-xs text-slate-400">{m.email}</div></td><td><Badge tone={m.role === "admin" ? "blue" : "gray"}>{m.role}</Badge>{m.role === "worker" && (m.verified ? <Badge tone="green" className="ml-1">Verified</Badge> : null)}</td>
           <td className="p-4 text-right">{m.role === "worker" && <ActionButton url={`/api/admin/workers/${m.id}`} data={{ verified: !m.verified }} variant="secondary" success="Updated">{m.verified ? "Remove badge" : "Verify"}</ActionButton>}{m.id !== s.userId && <ActionButton url={`/api/admin/members/${m.id}`} method="DELETE" variant="ghost" confirm="Remove this member from your organisation?" className="ml-2">Remove</ActionButton>}</td></tr>))}</tbody></table></div>
-      <h2 className="mb-3 mt-10 text-lg font-bold">Recent emails</h2>
+      <div className="mb-3 mt-10 flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-bold">Recent emails</h2><TestEmailButton /></div>
       <div className="card divide-y divide-slate-100">{d.mails.length === 0 && <p className="p-6 text-sm text-slate-400">No emails yet.</p>}{d.mails.map((m) => <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 p-4 text-sm"><div className="min-w-0"><div className="truncate font-medium">{m.subject}</div><div className="text-xs text-slate-400">{m.toEmail} · {m.template} · {timeAgo(m.createdAt)}{m.error ? ` · ${m.error}` : ""}</div></div><StatusBadge status={m.status === "queued" ? "pending" : m.status === "sent" ? "completed" : "rejected"} /></div>)}</div>
     </div>
   );
