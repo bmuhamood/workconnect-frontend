@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   title: { default: "WorkConnect — Hire trusted workers in Uganda", template: "%s · WorkConnect" },
   description: "Find verified house help, nannies, drivers, cooks and more — with contracts, payments and reviews built in.",
 };
+// Every page depends on the signed-in user / tenant, so render per request.
+export const dynamic = "force-dynamic";
 export const viewport: Viewport = { themeColor: "#4f46e5" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

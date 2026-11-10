@@ -27,7 +27,7 @@ export async function GET(req: Request) {
             await notify(tx, uid, { title: `Signature needed: ${c.title}`, body: "This contract is waiting for your signature.", link: `/contracts/${c.id}`, email: true, followUp: true });
         }
       // Invoices due within 3 days or overdue
-      for (const i of await tx.select().from(invoices).where(and(eq(invoices.status, "pending"), lt(invoices.dueDate, sql`(current_date + 3)::text`))))
+      for (const i of await tx.select().from(invoices).where(and(eq(invoices.status, "pending"), lt(invoices.dueDate, sql`(current_date + 3)`))))
         if (await once("invoice_reminder", i.id)) {
           stats.invoices++;
           const [u] = await tx.select({ email: users.email, first: users.firstName }).from(users).where(eq(users.id, i.employerId)).limit(1);
