@@ -38,10 +38,10 @@ async function deliver(row: Row, from: string, headers?: Record<string, string>)
 }
 
 /** Sends queued/failed emails (max 5 attempts). Runs after each request and from the cron. Uses the owner role on purpose. */
-export async function flushOutbox(limit = 25) {
+export async function flushOutbox(limit = 25, tenantId?: string) {
   const rows = await rootDb.select({ r: emailOutbox, t: tenants }).from(emailOutbox)
     .innerJoin(tenants, eq(tenants.id, emailOutbox.tenantId))
-    .where(and(inArray(emailOutbox.status, ["queued", "failed"]), lt(emailOutbox.attempts, 5)))
+    .where(and(inArray(emailOutbox.status, ["queued", "failed"]), lt(emailOutbox.attempts, 5), tenantId ? eq(emailOutbox.tenantId, tenantId) : undefined))
     .orderBy(emailOutbox.createdAt).limit(limit);
   let sent = 0;
   for (const { r, t } of rows) {

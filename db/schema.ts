@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  pgTable, uuid, text, integer, boolean, timestamp, date, pgEnum, index, uniqueIndex,
+  pgTable, uuid, text, integer, boolean, timestamp, date, pgEnum, index, uniqueIndex, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["worker", "employer", "admin"]);
@@ -26,6 +26,16 @@ export const tenants = pgTable("tenants", {
   contactEmail: text("contact_email"),
   contactPhone: text("contact_phone"),
   contactAddress: text("contact_address"),
+  // HR Operations settings
+  timezone: text("timezone").notNull().default("Africa/Kampala"),
+  workStart: text("work_start").notNull().default("08:00"),
+  lateGraceMinutes: integer("late_grace_minutes").notNull().default(15),
+  leavePolicy: jsonb("leave_policy").$type<Record<string, number>>().notNull().default({ annual: 21, sick: 14, maternity: 60, paternity: 4, compassionate: 5 }),
+  payeBands: text("paye_bands").notNull().default("0,0\n335000,10\n410000,20\n10000000,40"),
+  nssfEmployeeBps: integer("nssf_employee_bps").notNull().default(500),
+  nssfEmployerBps: integer("nssf_employer_bps").notNull().default(1000),
+  nssfCap: integer("nssf_cap").notNull().default(0),
+  payrollRatesConfirmedAt: timestamp("payroll_rates_confirmed_at", { withTimezone: true }),
   createdAt: ts("created_at"),
 }, (t) => [uniqueIndex("tenants_slug_uq").on(t.slug), uniqueIndex("tenants_domain_uq").on(t.domain)]);
 
@@ -227,6 +237,103 @@ export const contactMessages = pgTable("contact_messages", {
   createdAt: ts("created_at"),
 }, (t) => [index("contact_tenant_idx").on(t.tenantId, t.createdAt), index("contact_email_idx").on(t.tenantId, t.email, t.createdAt)]);
 
+export const servicePackages = pgTable("service_packages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: tenantCol(),
+  name: text("name").notNull(),
+  tagline: text("tagline").notNull().default(""),
+  priceText: text("price_text").notNull().default("Custom quote"),
+  billingNote: text("billing_note").notNull().default(""),
+  features: text("features").array().notNull().default([]),
+  highlighted: boolean("highlighted").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdAt: ts("created_at"),
+});
+
+export const leaveRequests = pgTable("leave_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: tenantCol(),
+  contractId: uuid("contract_id").notNull().references(() => contracts.id, { onDelete: "cascade" }),
+  workerId: uuid("worker_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  employerId: uuid("employer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  days: integer("days").notNull(),
+  reason: text("reason"),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected | cancelled
+  decidedBy: uuid("decided_by"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  decisionNote: text("decision_note"),
+  createdAt: ts("created_at"),
+}, (t) => [index("leave_worker_idx").on(t.tenantId, t.workerId, t.startDate), index("leave_status_idx").on(t.tenantId, t.status)]);
+
+export const attendanceRecords = pgTable("attendance_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: tenantCol(),
+  contractId: uuid("contract_id").notNull().references(() => contracts.id, { onDelete: "cascade" }),
+  workerId: uuid("worker_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  workDate: date("work_date").notNull(),
+  clockIn: timestamp("clock_in", { withTimezone: true }),
+  clockOut: timestamp("clock_out", { withTimezone: true }),
+  status: text("status").notNull().default("present"), // present | late
+  source: text("source").notNull().default("self"), // self | manual
+  note: text("note"),
+  createdAt: ts("created_at"),
+}, (t) => [uniqueIndex("att_contract_day_uq").on(t.contractId, t.workDate), index("att_day_idx").on(t.tenantId, t.workDate)]);
+
+export const payrollRuns = pgTable("payroll_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: tenantCol(),
+  period: text("period").notNull(), // YYYY-MM
+  status: text("status").notNull().default("draft"), // draft | approved | paid
+  createdBy: uuid("created_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  createdAt: ts("created_at"),
+}, (t) => [uniqueIndex("run_period_uq").on(t.tenantId, t.period)]);
+
+export const payrollLines = pgTable("payroll_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: tenantCol(),
+  runId: uuid("run_id").notNull().references(() => payrollRuns.id, { onDelete: "cascade" }),
+  contractId: uuid("contract_id").notNull().references(() => contracts.id, { onDelete: "cascade" }),
+  workerId: uuid("worker_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  employerId: uuid("employer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  basic: integer("basic").notNull(),
+  allowances: integer("allowances").notNull().default(0),
+  unpaidDays: integer("unpaid_days").notNull().default(0),
+  unpaidDeduction: integer("unpaid_deduction").notNull().default(0),
+  otherDeductions: integer("other_deductions").notNull().default(0),
+  gross: integer("gross").notNull(),
+  nssfEmployee: integer("nssf_employee").notNull(),
+  paye: integer("paye").notNull(),
+  netPay: integer("net_pay").notNull(),
+  nssfEmployer: integer("nssf_employer").notNull(),
+  createdAt: ts("created_at"),
+}, (t) => [uniqueIndex("line_run_contract_uq").on(t.runId, t.contractId), index("line_worker_idx").on(t.tenantId, t.workerId)]);
+
+export const supportTickets = pgTable("support_tickets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: tenantCol(),
+  requesterId: uuid("requester_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  category: text("category").notNull(),
+  subject: text("subject").notNull(),
+  status: text("status").notNull().default("open"), // open | in_progress | resolved
+  updatedAt: ts("updated_at"),
+  createdAt: ts("created_at"),
+}, (t) => [index("ticket_req_idx").on(t.tenantId, t.requesterId), index("ticket_status_idx").on(t.tenantId, t.status)]);
+
+export const ticketMessages = pgTable("ticket_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: tenantCol(),
+  ticketId: uuid("ticket_id").notNull().references(() => supportTickets.id, { onDelete: "cascade" }),
+  authorId: uuid("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  createdAt: ts("created_at"),
+}, (t) => [index("tmsg_ticket_idx").on(t.ticketId, t.createdAt)]);
+
 /** Dedupes automated follow-ups so a reminder is only sent once per entity/kind. */
 export const followups = pgTable("followups", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -238,5 +345,5 @@ export const followups = pgTable("followups", {
 
 export const TENANT_TABLES = [
   "memberships", "worker_profiles", "employer_profiles", "categories", "jobs", "applications", "contracts",
-  "invoices", "conversations", "messages", "reviews", "notifications", "email_outbox", "followups", "contact_messages",
+  "invoices", "conversations", "messages", "reviews", "notifications", "email_outbox", "followups", "contact_messages", "service_packages", "leave_requests", "attendance_records", "payroll_runs", "payroll_lines", "support_tickets", "ticket_messages",
 ] as const;

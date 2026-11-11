@@ -8,7 +8,8 @@ import { TOPICS } from "@/lib/contact-topics";
 
 export const metadata: Metadata = { title: "Contact us", description: "Get in touch about hiring, finding work, payroll or partnerships." };
 
-export default async function Contact() {
+export default async function Contact({ searchParams }: { searchParams: Promise<{ package?: string; topic?: string }> }) {
+  const sp = await searchParams;
   const [t, s] = await Promise.all([currentTenant(), getSession()]);
   const rows = [
     t?.contactEmail && { Icon: Mail, label: "Email", value: t.contactEmail, href: `mailto:${t.contactEmail}` },
@@ -19,7 +20,7 @@ export default async function Contact() {
     <div className="container-x py-14 sm:py-20">
       <div className="grid gap-10 lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-16">
         <div>
-          <h1 className="text-3xl font-bold sm:text-5xl">Let's talk about your team</h1>
+          <h1 className="text-3xl font-bold sm:text-5xl">Let's talk about your HR</h1>
           <p className="mt-5 text-lg leading-relaxed text-slate-600">Tell us what you need, whether that's hiring staff, finding work, payroll or something else. {t ? `${t.name} replies by email` : "We reply by email"}, usually within one working day.</p>
           {rows.length > 0 && (
             <ul className="mt-9 space-y-5">
@@ -36,7 +37,7 @@ export default async function Contact() {
             <Link href="/jobs" className="card flex items-center gap-3 p-4"><Users className="size-5 text-signal" /><span><span className="block font-semibold">Looking for work?</span><span className="text-sm text-slate-500">Browse open jobs</span></span></Link>
           </div>
         </div>
-        <div className="relative"><ContactForm topics={TOPICS} defaults={{ name: s?.name, email: s?.email }} /></div>
+        <div className="relative"><ContactForm topics={TOPICS} defaults={sp.package ? { name: s?.name, email: s?.email, topic: "Package enquiry", message: `I'd like a quote for the ${sp.package.slice(0, 80)} package.\n\nOur team size and what we need: ` } : sp.topic === "consultation" ? { name: s?.name, email: s?.email, topic: "Book a consultation", message: "I'd like to book a consultation about our HR needs.\n\nOur business and team size: " } : { name: s?.name, email: s?.email }} /></div>
       </div>
     </div>
   );

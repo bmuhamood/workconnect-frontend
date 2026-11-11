@@ -33,6 +33,7 @@ const statusTone: Record<string, keyof typeof tones> = {
   open: "green", active: "green", paid: "green", accepted: "green", completed: "blue", shortlisted: "blue",
   pending: "amber", pending_signature: "amber", draft: "gray", filled: "blue", closed: "gray",
   rejected: "red", terminated: "red", overdue: "red", withdrawn: "gray",
+  approved: "green", resolved: "green", in_progress: "blue", present: "green", late: "amber", cancelled: "gray", absent: "red", leave: "blue", open_ticket: "amber",
 };
 export const StatusBadge = ({ status }: { status: string }) =>
   <Badge tone={statusTone[status] ?? "gray"}>{status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</Badge>;
