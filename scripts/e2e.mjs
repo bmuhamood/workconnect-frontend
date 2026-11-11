@@ -97,8 +97,8 @@ check("admin page renders", (await agency.c.req("/admin")).status === 200);
 check("admin sends campaign to opted-in members", (await agency.c.req("/api/admin/campaigns", { method: "POST", body: { subject: "Welcome offer", message: "We have new features for you this month.", audience: "all" } })).json?.queued >= 3);
 
 // 6. Cross-tenant attacks (seeded tenant A employer vs our new tenant)
-const attacker = new Client(); attacker.jar.wc_tenant = "kampala-homes";
-const lg = await attacker.req("/api/local-auth/login", { method: "POST", body: { email: "employer@kampala-homes.ug", password: "Password123!" } });
+const attacker = new Client(); attacker.jar.wc_tenant = "work-connect-ug";
+const lg = await attacker.req("/api/local-auth/login", { method: "POST", body: { email: "client1@workconnect.ug", password: "Password123!" } });
 check("seeded employer from another tenant signs in", lg.status === 200);
 check("other tenant cannot open our job page", (await attacker.req(`/jobs/${jobId}`)).status === 404);
 check("other tenant cannot see our worker profile", (await attacker.req(`/workers/${workerId}`)).status === 404);
@@ -113,7 +113,7 @@ check("forging the tenant cookie does not grant access", (await forged.req(`/job
 
 // 7. Public pages
 for (const p of ["/", "/jobs", "/workers", "/login", "/register", "/about", "/help", "/terms", "/privacy"]) check(`public page ${p} renders`, (await anon.req(p)).status === 200);
-check("tenant entry link sets cookie + redirects", (await anon.req("/t/kampala-homes")).status === 307);
+check("tenant entry link sets cookie + redirects", (await anon.req("/t/work-connect-ug")).status === 307);
 
 // 8. Cron
 const cron = await anon.req("/api/cron/emails", { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
@@ -154,8 +154,8 @@ check("honeypot message never reached the inbox", !inbox.text.includes("buy chea
 check("admin email carries Reply-To the visitor + visitor gets a receipt", /New contact message: I want to hire staff/.test(inbox.text) && /We received your message/.test(inbox.text));
 for (let k = 0; k < 2; k++) await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "General question", message: `Another message number ${k} please` } });
 check("rate limit: 4th message in an hour from the same email -> 429", (await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "General question", message: "Yet another one please answer" } })).status === 429);
-const otherAdmin = new Client(); otherAdmin.jar.wc_tenant = "kampala-homes";
-await otherAdmin.req("/api/local-auth/login", { method: "POST", body: { email: "admin@kampala-homes.ug", password: "Password123!" } });
+const otherAdmin = new Client(); otherAdmin.jar.wc_tenant = "work-connect-ug";
+await otherAdmin.req("/api/local-auth/login", { method: "POST", body: { email: "owner@workconnect.ug", password: "Password123!" } });
 const otherInbox = await otherAdmin.req("/admin");
 check("another tenant's admin cannot see our contact messages", otherInbox.status === 200 && !otherInbox.text.includes(mark) && !otherInbox.text.includes(`v.${run}@e2e.test`));
 check("admin saves contact details", (await agency.c.req("/api/admin/tenant", { method: "PATCH", body: { name: slugBase, brandColor: "#4f46e5", serviceFeePercent: 10, contactEmail: "hello@listoq.com", contactPhone: "+256 700 123 456", contactAddress: "Plot 1, Kampala Road" } })).status === 200);

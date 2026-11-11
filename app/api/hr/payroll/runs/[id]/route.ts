@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { payrollRuns, payrollLines } from "@/db/schema";
+import { payrollRuns, payrollLines, contracts } from "@/db/schema";
 import { route, body, fail } from "@/lib/http";
 import { notify } from "@/lib/domain";
-import { getTenant, payrollConfig, unpaidDaysFor, lineValues } from "@/lib/hr";
+import { getTenant, payrollConfig, unpaidDaysFor, lineValues, overtimeFor } from "@/lib/hr";
 
 export const PATCH = route<{ id: string }>({ roles: ["admin"] }, async (req, { params, db }) => {
   const { action } = await body(req, z.object({ action: z.enum(["recalculate", "approve", "paid"]) }));
@@ -15,7 +15,10 @@ export const PATCH = route<{ id: string }>({ roles: ["admin"] }, async (req, { p
   if (action === "recalculate") {
     if (run.status !== "draft") throw fail(409, "Only a draft run can be recalculated");
     const cfg = payrollConfig(t);
-    for (const l of lines) await db.update(payrollLines).set(lineValues(l.basic, l.allowances, l.otherDeductions, await unpaidDaysFor(db, l.workerId, run.period), cfg)).where(eq(payrollLines.id, l.id));
+    for (const l of lines) {
+      const [c] = await db.select().from(contracts).where(eq(contracts.id, l.contractId)).limit(1);
+      await db.update(payrollLines).set(lineValues(l.basic, l.allowances, l.otherDeductions, await unpaidDaysFor(db, l.workerId, run.period), cfg, c ? await overtimeFor(db, c, run.period) : { minutes: 0, pay: 0 })).where(eq(payrollLines.id, l.id));
+    }
     return { ok: true };
   }
   if (action === "approve") {

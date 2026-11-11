@@ -4,7 +4,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { AlertTriangle } from "lucide-react";
 import { tdb } from "@/lib/tenant";
 import { requireSession } from "@/lib/session";
-import { payrollRuns, payrollLines } from "@/db/schema";
+import { payrollRuns, payrollLines, users } from "@/db/schema";
 import { Empty, StatusBadge } from "@/components/ui";
 import { AjaxForm, Field } from "@/components/ajax-form";
 import { ugx } from "@/lib/format";
@@ -12,13 +12,28 @@ import { localParts } from "@/lib/hr-calc";
 
 export const metadata: Metadata = { title: "Payroll" };
 export default async function Payroll() {
-  const s = await requireSession(["admin", "worker"]);
+  const s = await requireSession(["admin", "worker", "employer"]);
   const d = await tdb(async (tx, t) => {
     const month = localParts(new Date(), t.timezone).ymd.slice(0, 7);
     if (s.role === "worker") return { kind: "worker" as const, month, slips: await tx.select({ l: payrollLines, run: payrollRuns }).from(payrollLines).innerJoin(payrollRuns, eq(payrollRuns.id, payrollLines.runId)).where(sql`${payrollLines.workerId} = ${s.userId} and ${payrollRuns.status} in ('approved','paid')`).orderBy(desc(payrollRuns.period)) };
+    if (s.role === "employer") return { kind: "employer" as const, month, lines: await tx.select({ l: payrollLines, run: payrollRuns, first: users.firstName, last: users.lastName }).from(payrollLines).innerJoin(payrollRuns, eq(payrollRuns.id, payrollLines.runId)).innerJoin(users, eq(users.id, payrollLines.workerId)).where(sql`${payrollLines.employerId} = ${s.userId} and ${payrollRuns.status} in ('approved','paid')`).orderBy(desc(payrollRuns.period), users.firstName) };
     const runs = await tx.select({ run: payrollRuns, n: sql<number>`count(${payrollLines.id})::int`, gross: sql<number>`coalesce(sum(${payrollLines.gross}),0)::int`, net: sql<number>`coalesce(sum(${payrollLines.netPay}),0)::int`, er: sql<number>`coalesce(sum(${payrollLines.nssfEmployer}),0)::int` }).from(payrollRuns).leftJoin(payrollLines, eq(payrollLines.runId, payrollRuns.id)).groupBy(payrollRuns.id).orderBy(desc(payrollRuns.period));
     return { kind: "admin" as const, month, t, runs };
   });
+  if (d.kind === "employer") {
+    const periods = [...new Set(d.lines.map((x) => x.run.period))];
+    return (
+      <div className="space-y-6">
+        <div><h2 className="text-lg font-bold">Payroll costs for your employees</h2><p className="mt-1 text-sm text-slate-600">Read-only. Figures appear once your HR consultancy approves a month's payroll.</p></div>
+        {d.lines.length === 0 ? <Empty title="No approved payroll yet" hint="Once payroll is approved for a month, each employee's pay and overtime shows here." /> : periods.map((p) => {
+          const rows = d.lines.filter((x) => x.run.period === p);
+          return (
+            <section key={p} className="card overflow-x-auto"><div className="flex items-center justify-between p-4"><h3 className="font-semibold">{p}</h3><span className="text-sm text-slate-600">Total gross {ugx(rows.reduce((n, x) => n + x.l.gross, 0))}</span></div>
+              <table className="w-full min-w-[640px] text-sm"><caption className="sr-only">Payroll for {p}</caption><thead className="border-y border-slate-200 text-left text-slate-500"><tr><th scope="col" className="p-4 font-medium">Employee</th><th scope="col" className="text-right font-medium">Basic</th><th scope="col" className="text-right font-medium">Overtime</th><th scope="col" className="text-right font-medium">Gross</th><th scope="col" className="text-right font-medium">Net pay</th><th scope="col" className="p-4 font-medium">Status</th></tr></thead>
+                <tbody className="divide-y divide-slate-200">{rows.map(({ l, run, first, last }) => <tr key={l.id}><td className="p-4 font-medium"><Link className="hover:text-accent-strong" href={`/hr/payroll/${run.id}/payslip/${l.id}`}>{first} {last}</Link></td><td className="text-right">{l.basic.toLocaleString()}</td><td className="text-right">{l.overtimePay ? l.overtimePay.toLocaleString() : "—"}</td><td className="text-right">{l.gross.toLocaleString()}</td><td className="text-right font-semibold">{l.netPay.toLocaleString()}</td><td className="p-4"><StatusBadge status={run.status} /></td></tr>)}</tbody></table></section>);
+        })}
+      </div>);
+  }
   if (d.kind === "worker") return (
     <div>
       <h2 className="mb-4 text-lg font-bold">My payslips</h2>

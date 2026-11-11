@@ -87,7 +87,7 @@ function Monitoring() {
   );
 }
 function Support() {
-  const bub = (me: boolean, t: string) => <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2 text-sm", me ? "ml-auto bg-gradient-to-br from-brand-600 to-[#6a4fe6] text-onbrand" : "bg-slate-100 text-slate-700")}>{t}</div>;
+  const bub = (me: boolean, t: string) => <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2 text-sm", me ? "ml-auto bg-gradient-to-br from-brand-600 to-brand-700 text-onbrand" : "bg-slate-100 text-slate-700")}>{t}</div>;
   return (
     <div className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/40 p-4">
       {bub(false, "Can I get a copy of my employment contract?")}
@@ -121,7 +121,7 @@ export function ServicesExplorer() {
             <button key={s.id} ref={(el) => { refs.current[k] = el; }} role="tab" id={`svc-tab-${s.id}`} aria-selected={on} aria-controls="svc-panel" tabIndex={on ? 0 : -1}
               onClick={() => setI(k)} onKeyDown={(e) => { if (e.key === "ArrowDown") { e.preventDefault(); move(k + 1); } if (e.key === "ArrowUp") { e.preventDefault(); move(k - 1); } }}
               className={cn("group flex items-start gap-3 rounded-xl border p-3.5 text-left transition", on ? "border-brand-400/60 bg-brand-50 shadow-[0_0_30px_-12px_rgba(110,128,255,.7)]" : "border-transparent hover:border-slate-300/50 hover:bg-slate-100/40")}>
-              <span className={cn("mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg", on ? "bg-gradient-to-br from-brand-600 to-[#6a4fe6] text-onbrand" : "bg-slate-100 text-slate-500 group-hover:text-slate-700")}><Icon className="size-[18px]" /></span>
+              <span className={cn("mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg", on ? "bg-gradient-to-br from-brand-600 to-brand-700 text-onbrand" : "bg-slate-100 text-slate-500 group-hover:text-slate-700")}><Icon className="size-[18px]" /></span>
               <span><span className={cn("block font-semibold", on ? "text-slate-900" : "text-slate-700")}>{s.title}</span><span className="mt-0.5 block text-sm leading-snug text-slate-500">{s.blurb}</span></span>
             </button>
           );

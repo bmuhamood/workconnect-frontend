@@ -4,11 +4,14 @@ import { contracts, invoices } from "@/db/schema";
 import { route, body, fail } from "@/lib/http";
 import { notify } from "@/lib/domain";
 
-export const PATCH = route<{ id: string }>({ roles: ["employer", "worker"] }, async (req, { params, session: s, db }) => {
+export const PATCH = route<{ id: string }>({ roles: ["employer", "worker", "admin"] }, async (req, { params, session: s, db }) => {
   const { action, reason } = await body(req, z.object({ action: z.enum(["sign", "complete", "terminate"]), reason: z.string().trim().max(1000).optional() }));
   const [c] = await db.select().from(contracts).where(eq(contracts.id, params.id)).limit(1);
-  if (!c || (c.employerId !== s.userId && c.workerId !== s.userId)) throw fail(404, "Contract not found");
-  const isEmployer = c.employerId === s.userId;
+  if (!c || (s.role !== "admin" && c.employerId !== s.userId && c.workerId !== s.userId)) throw fail(404, "Contract not found");
+  // The consultancy admin acts on behalf of the client (employer side) for complete / terminate, but can't sign for anyone.
+  const isAdmin = s.role === "admin";
+  if (isAdmin && action === "sign") throw fail(403, "Only the client and the employee can sign");
+  const isEmployer = c.employerId === s.userId || isAdmin;
   const other = isEmployer ? c.workerId : c.employerId;
   const link = `/contracts/${c.id}`;
 
@@ -35,5 +38,6 @@ export const PATCH = route<{ id: string }>({ roles: ["employer", "worker"] }, as
   if (c.status === "completed" || c.status === "terminated") throw fail(409, "This contract has already ended");
   await db.update(contracts).set({ status: "terminated", endedAt: new Date(), terminationReason: reason || null }).where(eq(contracts.id, c.id));
   await notify(db, other, { title: "Contract terminated", body: `${s.name} ended ${c.title}.${reason ? " Reason: " + reason : ""}`, link, email: true });
+  if (isAdmin) await notify(db, c.employerId, { title: "Contract terminated", body: `${s.name} (${s.tenantName}) ended ${c.title}.${reason ? " Reason: " + reason : ""}`, link, email: true });
   return { ok: true };
 });

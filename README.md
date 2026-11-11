@@ -2,6 +2,9 @@
 
 Multi-tenant hiring marketplace (Next.js 16 · Neon Postgres · Neon Auth · Drizzle · Resend). Deploys to Vercel.
 
+## Roles
+Super WorkConnect Admin → HR consultancy owner/admin → client companies → employees. Full detail, overtime rules and test logins: **SYSTEM_DESIGN.md**.
+
 ## Architecture
 - **Tenants**: every organisation (agency) is a `tenant`. Every business table has a `tenant_id` filled automatically from the request context.
 - **Isolation**: Postgres Row-Level Security (`FORCE`d) on all tenant tables. Each request runs in a transaction that does `SET LOCAL ROLE wc_app` (a role without BYPASSRLS) and sets `app.tenant_id`. Without a tenant context, queries return zero rows. `npm run test:isolation` proves it.
@@ -25,7 +28,7 @@ npm run db:migrate               # creates tables, RLS policies and the wc_app r
 npm run test:isolation           # must print "All isolation checks passed"
 npm run build && npm start
 ```
-`npm run db:seed` loads two demo tenants (local logins only; demo users have no Neon Auth identity).
+`npm run db:seed:reset` wipes the database and loads full demo data for two HR consultancies (see **SYSTEM_DESIGN.md** for every login). Demo users have no Neon Auth identity; set `ENABLE_DEMO_LOGIN=1` + `AUTH_SECRET` to let them sign in on a Neon-Auth deployment (testing only).
 
 ## Vercel
 1. Import the GitHub repo in Vercel (framework: Next.js).

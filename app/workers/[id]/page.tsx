@@ -7,6 +7,7 @@ import { workerProfiles, users, reviews, jobs } from "@/db/schema";
 import { Avatar, Badge, Stars, LinkButton } from "@/components/ui";
 import { AjaxForm, Field } from "@/components/ajax-form";
 import { MessageButton } from "@/components/message-button";
+import { ScheduleFields } from "@/components/schedule-fields";
 import { ugx, rating, timeAgo } from "@/lib/format";
 
 const isId = (s?: string) => !!s && /^[0-9a-f-]{36}$/i.test(s);
@@ -54,6 +55,7 @@ export default async function WorkerPage({ params, searchParams }: { params: Pro
               <Field label="Start date"><input name="startDate" type="date" required className="input" /></Field>
               <Field label="Work location"><input name="location" defaultValue={job?.location ?? ""} className="input" /></Field>
               <Field label="Hours per week"><input name="hoursPerWeek" type="number" min={1} max={100} defaultValue={40} className="input" /></Field>
+              <ScheduleFields />
               <Field label="Terms / duties"><textarea name="description" rows={3} defaultValue={job?.description ?? ""} className="input" /></Field>
             </AjaxForm>
           </div>)}

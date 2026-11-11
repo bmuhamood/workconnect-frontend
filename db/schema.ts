@@ -36,6 +36,8 @@ export const tenants = pgTable("tenants", {
   nssfEmployerBps: integer("nssf_employer_bps").notNull().default(1000),
   nssfCap: integer("nssf_cap").notNull().default(0),
   payrollRatesConfirmedAt: timestamp("payroll_rates_confirmed_at", { withTimezone: true }),
+  /** Set by the platform admin to lock an organisation out (e.g. unpaid subscription). */
+  suspendedAt: timestamp("suspended_at", { withTimezone: true }),
   createdAt: ts("created_at"),
 }, (t) => [uniqueIndex("tenants_slug_uq").on(t.slug), uniqueIndex("tenants_domain_uq").on(t.domain)]);
 
@@ -50,6 +52,8 @@ export const users = pgTable("users", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
+  /** Platform-level "Super WorkConnect Admin". Not tied to any tenant; sees every HR consultancy. */
+  isSuperAdmin: boolean("is_super_admin").default(false).notNull(),
   createdAt: ts("created_at"),
 }, (t) => [uniqueIndex("users_email_uq").on(t.email), uniqueIndex("users_auth_uq").on(t.authId)]);
 
@@ -141,6 +145,13 @@ export const contracts = pgTable("contracts", {
   startDate: date("start_date").notNull(),
   location: text("location"),
   hoursPerWeek: integer("hours_per_week").notNull().default(40),
+  // Working schedule agreed in THIS contract (drives lateness, overtime and pay).
+  workStart: text("work_start").notNull().default("08:00"),
+  workEnd: text("work_end").notNull().default("17:00"),
+  workDays: text("work_days").notNull().default("1,2,3,4,5"), // ISO weekdays, 1 = Monday … 7 = Sunday
+  breakMinutes: integer("break_minutes").notNull().default(60), // unpaid break inside the shift
+  lateGraceMinutes: integer("late_grace_minutes").notNull().default(15),
+  overtimeRateBps: integer("overtime_rate_bps").notNull().default(15000), // 15000 = 1.5x hourly rate
   status: contractStatusEnum("status").notNull().default("pending_signature"),
   signedByEmployer: boolean("signed_by_employer").notNull().default(false),
   signedByWorker: boolean("signed_by_worker").notNull().default(false),
@@ -280,6 +291,11 @@ export const attendanceRecords = pgTable("attendance_records", {
   status: text("status").notNull().default("present"), // present | late
   source: text("source").notNull().default("self"), // self | manual
   note: text("note"),
+  lateMinutes: integer("late_minutes").notNull().default(0), // minutes after the contract start time
+  overtimeMinutes: integer("overtime_minutes").notNull().default(0), // worked beyond the contract end time (or on a non-working day)
+  overtimeStatus: text("overtime_status").notNull().default("none"), // none | pending | approved | rejected
+  overtimeDecidedBy: uuid("overtime_decided_by"),
+  overtimeDecidedAt: timestamp("overtime_decided_at", { withTimezone: true }),
   createdAt: ts("created_at"),
 }, (t) => [uniqueIndex("att_contract_day_uq").on(t.contractId, t.workDate), index("att_day_idx").on(t.tenantId, t.workDate)]);
 
@@ -305,6 +321,8 @@ export const payrollLines = pgTable("payroll_lines", {
   allowances: integer("allowances").notNull().default(0),
   unpaidDays: integer("unpaid_days").notNull().default(0),
   unpaidDeduction: integer("unpaid_deduction").notNull().default(0),
+  overtimeMinutes: integer("overtime_minutes").notNull().default(0), // approved overtime paid in this run
+  overtimePay: integer("overtime_pay").notNull().default(0),
   otherDeductions: integer("other_deductions").notNull().default(0),
   gross: integer("gross").notNull(),
   nssfEmployee: integer("nssf_employee").notNull(),

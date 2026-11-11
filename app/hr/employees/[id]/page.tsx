@@ -8,7 +8,8 @@ import { Avatar, StatusBadge } from "@/components/ui";
 import { DayBadge } from "@/components/day-badge";
 import { AjaxForm, Field } from "@/components/ajax-form";
 import { leaveBalances, rangeStatus, fmtTime } from "@/lib/hr";
-import { eachDay, localParts, LEAVE_TYPES, hoursBetween } from "@/lib/hr-calc";
+import { eachDay, localParts, LEAVE_TYPES, hoursBetween, describeSchedule, fmtMinutes } from "@/lib/hr-calc";
+import { TerminateButton } from "@/components/terminate-button";
 import { ugx } from "@/lib/format";
 
 export default async function EmployeePage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,7 +40,8 @@ export default async function EmployeePage({ params }: { params: Promise<{ id: s
         <Avatar name={name} src={d.w.avatar} size={64} />
         <div className="min-w-0 flex-1"><h2 className="text-2xl font-bold">{name}</h2><p className="text-slate-500">{d.c.title} · for {d.e.first} {d.e.last}</p><p className="mt-1 text-sm text-slate-500">{d.w.email}{d.w.phone ? ` · ${d.w.phone}` : ""}</p></div>
         <dl className="grid grid-cols-3 gap-6 text-sm"><div><dt className="text-slate-400">Started</dt><dd className="font-semibold">{d.c.startDate}</dd></div><div><dt className="text-slate-400">Hours / week</dt><dd className="font-semibold">{d.c.hoursPerWeek}</dd></div><div><dt className="text-slate-400">Monthly salary</dt><dd className="font-semibold">{ugx(d.c.salary)}</dd></div></dl>
-        <Link href={`/contracts/${d.c.id}`} className="text-sm font-medium text-accent hover:text-accent-strong">View contract</Link>
+        <div className="flex flex-col items-start gap-3"><Link href={`/contracts/${d.c.id}`} className="text-sm font-medium text-accent hover:text-accent-strong">View contract</Link><TerminateButton contractId={d.c.id} label="Terminate employment" redirect="/hr/employees" /></div>
+        <p className="w-full border-t border-slate-200 pt-4 text-sm leading-relaxed text-slate-600"><b>Contract hours:</b> {describeSchedule(d.c)}</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="card p-6"><h3 className="mb-4 font-semibold">Leave balances ({d.today.slice(0, 4)})</h3>
@@ -49,8 +51,8 @@ export default async function EmployeePage({ params }: { params: Promise<{ id: s
           {d.leave.length === 0 ? <p className="text-sm text-slate-400">No leave taken or requested.</p> : <ul className="divide-y divide-slate-100 text-sm">{d.leave.map((l) => <li key={l.id} className="flex items-center justify-between gap-3 py-2.5"><span>{LEAVE_TYPES[l.type] ?? l.type} · {l.days}d <span className="text-slate-400">{l.startDate} → {l.endDate}</span></span><StatusBadge status={l.status} /></li>)}</ul>}</section>
       </div>
       <section className="card p-6"><h3 className="mb-4 font-semibold">Last 14 days</h3>
-        <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-sm"><thead className="text-left text-slate-400"><tr><th className="pb-2 font-medium">Date</th><th className="font-medium">Status</th><th className="font-medium">In</th><th className="font-medium">Out</th><th className="font-medium">Hours</th></tr></thead>
-          <tbody className="divide-y divide-slate-100">{d.days.map((x) => <tr key={x.ymd}><td className="py-2.5">{x.ymd}</td><td><DayBadge status={x.status} /></td><td>{fmtTime(x.clockIn, d.t.timezone)}</td><td>{fmtTime(x.clockOut, d.t.timezone)}</td><td>{x.clockOut ? hoursBetween(x.clockIn, x.clockOut).toFixed(1) : "—"}</td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-sm"><thead className="text-left text-slate-400"><tr><th className="pb-2 font-medium">Date</th><th className="font-medium">Status</th><th className="font-medium">In</th><th className="font-medium">Out</th><th className="font-medium">Late by</th><th className="font-medium">Overtime</th><th className="font-medium">Hours</th></tr></thead>
+          <tbody className="divide-y divide-slate-100">{d.days.map((x) => <tr key={x.ymd}><td className="py-2.5">{x.ymd}</td><td><DayBadge status={x.status} /></td><td>{fmtTime(x.clockIn, d.t.timezone)}</td><td>{fmtTime(x.clockOut, d.t.timezone)}</td><td>{x.lateMinutes > 0 ? `${x.lateMinutes} min` : "—"}</td><td>{x.overtimeMinutes > 0 ? `${fmtMinutes(x.overtimeMinutes)} (${x.overtimeStatus})` : "—"}</td><td>{x.clockOut ? hoursBetween(x.clockIn, x.clockOut).toFixed(1) : "—"}</td></tr>)}</tbody></table></div>
         <div className="mt-6 border-t border-slate-100 pt-5"><h4 className="mb-3 text-sm font-semibold">Add or correct a day</h4>
           <AjaxForm url="/api/hr/attendance" submit="Save attendance" success="Attendance saved" extra={{ contractId: d.c.id }} className="grid items-end gap-3 sm:grid-cols-5">
             <Field label="Date"><input type="date" name="date" required max={d.today} className="input" /></Field><Field label="In"><input type="time" name="clockIn" required className="input" /></Field><Field label="Out"><input type="time" name="clockOut" className="input" /></Field><div className="sm:col-span-2"><Field label="Note"><input name="note" className="input" /></Field></div>

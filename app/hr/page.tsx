@@ -16,7 +16,7 @@ export default async function HrOverview() {
   const d = await tdb(async (tx, t) => {
     const today = localParts(new Date(), t.timezone).ymd;
     const emps = await activeEmployees(tx, s);
-    const days = await dayStatus(tx, t, today, emps.map((e) => ({ id: e.id, workerId: e.workerId })));
+    const days = await dayStatus(tx, t, today, emps);
     if (s.role === "worker") {
       const mine = emps[0]; const st = mine ? days.get(mine.id) : undefined;
       const [slip] = await tx.select({ l: payrollLines, run: payrollRuns }).from(payrollLines).innerJoin(payrollRuns, eq(payrollRuns.id, payrollLines.runId)).where(and(eq(payrollLines.workerId, s.userId), sql`${payrollRuns.status} in ('approved','paid')`)).orderBy(desc(payrollRuns.period)).limit(1);

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, eq, gte, inArray, isNotNull, lte, or } from "drizzle-orm";
 import { contracts, payrollRuns, payrollLines } from "@/db/schema";
 import { route, body, fail } from "@/lib/http";
-import { getTenant, payrollConfig, unpaidDaysFor, lineValues } from "@/lib/hr";
+import { getTenant, payrollConfig, unpaidDaysFor, lineValues, overtimeFor } from "@/lib/hr";
 import { monthRange } from "@/lib/hr-calc";
 
 /** Creates a draft payroll run for a month with one line per employee on a live contract. */
@@ -14,6 +14,6 @@ export const POST = route({ roles: ["admin"] }, async (req, { session, db }) => 
   if (!staff.length) throw fail(400, `No employees were on a live contract in ${period}`);
   const cfg = payrollConfig(await getTenant(db));
   const [run] = await db.insert(payrollRuns).values({ period, createdBy: session.userId }).returning({ id: payrollRuns.id });
-  for (const c of staff) await db.insert(payrollLines).values({ runId: run.id, contractId: c.id, workerId: c.workerId, employerId: c.employerId, ...lineValues(c.salary, 0, 0, await unpaidDaysFor(db, c.workerId, period), cfg) });
+  for (const c of staff) await db.insert(payrollLines).values({ runId: run.id, contractId: c.id, workerId: c.workerId, employerId: c.employerId, ...lineValues(c.salary, 0, 0, await unpaidDaysFor(db, c.workerId, period), cfg, await overtimeFor(db, c, period)) });
   return { id: run.id, lines: staff.length };
 });

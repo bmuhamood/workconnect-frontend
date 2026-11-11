@@ -11,8 +11,10 @@ async function post(url: string, data: unknown) {
   if (!res.ok) throw new Error(json.error || "Something went wrong");
 }
 
-export async function signIn(mode: Mode, email: string, password: string) {
+export async function signIn(mode: Mode, email: string, password: string, demo = false) {
   if (mode === "local") return post("/api/local-auth/login", { email, password });
+  // Demo accounts (seeded, password only) are tried first when the demo switch is on; everyone else goes to Neon Auth.
+  if (demo) { try { await post("/api/local-auth/login", { email, password }); return; } catch { /* not a demo account */ } }
   const { error } = await (await neon()).signIn.email({ email, password });
   if (error) throw new Error(error.message || "Incorrect email or password");
 }
@@ -22,6 +24,7 @@ export async function signUp(mode: Mode, d: { email: string; password: string; f
   if (error) throw new Error(error.message || "Could not create your account");
 }
 export async function signOut(mode: Mode) {
-  if (mode === "local") return post("/api/local-auth/logout", {});
-  await (await neon()).signOut();
+  await post("/api/local-auth/logout", {}).catch(() => {});
+  if (mode === "local") return;
+  await (await neon()).signOut().catch(() => {});
 }

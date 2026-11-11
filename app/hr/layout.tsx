@@ -9,7 +9,7 @@ export default async function HrLayout({ children }: { children: React.ReactNode
     { href: "/hr", label: "Overview" },
     ...(s.role !== "worker" ? [{ href: "/hr/employees", label: "Employees" }] : []),
     { href: "/hr/leave", label: "Leave" }, { href: "/hr/attendance", label: "Attendance" },
-    ...(s.role !== "employer" ? [{ href: "/hr/payroll", label: s.role === "worker" ? "Payslips" : "Payroll" }] : []),
+    { href: "/hr/payroll", label: s.role === "worker" ? "Payslips" : s.role === "employer" ? "Payroll costs" : "Payroll" },
     { href: "/hr/support", label: "HR support" },
     ...(s.role === "admin" ? [{ href: "/hr/settings", label: "Settings" }] : []),
   ];

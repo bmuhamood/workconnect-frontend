@@ -10,6 +10,6 @@ export const PATCH = route<{ id: string }>({ roles: ["admin"] }, async (req, { p
   if (!l) throw fail(404, "Payroll line not found");
   const [run] = await db.select().from(payrollRuns).where(eq(payrollRuns.id, l.runId)).limit(1);
   if (run.status !== "draft") throw fail(409, "Approved payroll can't be edited");
-  await db.update(payrollLines).set(lineValues(l.basic, d.allowances, d.otherDeductions, l.unpaidDays, payrollConfig(await getTenant(db)))).where(eq(payrollLines.id, l.id));
+  await db.update(payrollLines).set(lineValues(l.basic, d.allowances, d.otherDeductions, l.unpaidDays, payrollConfig(await getTenant(db)), { minutes: l.overtimeMinutes, pay: l.overtimePay })).where(eq(payrollLines.id, l.id));
   return { ok: true };
 });

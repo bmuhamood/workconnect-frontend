@@ -25,14 +25,14 @@ export function payeFor(taxable: number, bands: Band[]): number {
 }
 
 export type PayrollConfig = { bands: Band[]; nssfEmployeeBps: number; nssfEmployerBps: number; nssfCap: number; workingDaysPerMonth?: number };
-export type LineInput = { basic: number; allowances: number; otherDeductions: number; unpaidDays: number };
+export type LineInput = { basic: number; allowances: number; otherDeductions: number; unpaidDays: number; overtimePay?: number };
 export type LineResult = { unpaidDeduction: number; gross: number; nssfEmployee: number; nssfEmployer: number; paye: number; netPay: number };
 
 /** PAYE is charged on gross pay; employee NSSF is deducted separately (it is not tax-deductible); employer NSSF is an employer cost. */
 export function computeLine(i: LineInput, c: PayrollConfig): LineResult {
   const perDay = i.basic / (c.workingDaysPerMonth ?? 22);
   const unpaidDeduction = Math.min(i.basic, Math.round(perDay * i.unpaidDays));
-  const gross = i.basic + i.allowances - unpaidDeduction;
+  const gross = i.basic + i.allowances + (i.overtimePay ?? 0) - unpaidDeduction;
   const base = c.nssfCap > 0 ? Math.min(gross, c.nssfCap) : gross;
   const nssfEmployee = Math.round((base * c.nssfEmployeeBps) / 10000);
   const nssfEmployer = Math.round((base * c.nssfEmployerBps) / 10000);
@@ -81,3 +81,55 @@ export function zonedToUtc(ymd: string, hhmm: string, tz: string): Date {
   return new Date(guess);
 }
 export const isRealDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + "T00:00:00Z")) && new Date(s + "T00:00:00Z").toISOString().slice(0, 10) === s;
+
+
+// ---------------------------------------------------------------------------------------------
+// Per-contract working schedule, lateness and overtime
+// ---------------------------------------------------------------------------------------------
+export type Schedule = { workStart: string; workEnd: string; workDays: string; breakMinutes: number; lateGraceMinutes: number; overtimeRateBps: number };
+export const OVERTIME_MIN_MINUTES = 15;  // shorter stretches are not counted
+export const OVERTIME_CAP_MINUTES = 360; // a forgotten clock-out can't create more than 6h of overtime
+export const DAY_NAMES = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+export const parseWorkDays = (s: string) => [...new Set(s.split(",").map((x) => Number(x.trim())).filter((n) => n >= 1 && n <= 7))].sort((a, b) => a - b);
+/** ISO weekday of a YYYY-MM-DD date: 1 = Monday … 7 = Sunday. */
+export const isoDow = (ymd: string) => { const d = new Date(toUtc(ymd)).getUTCDay(); return d === 0 ? 7 : d; };
+export const isWorkDay = (ymd: string, workDays: string) => parseWorkDays(workDays).includes(isoDow(ymd));
+export const hhmmToMinutes = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
+/** "Mon–Fri", "Mon, Wed, Sat" … */
+export function describeDays(workDays: string): string {
+  const d = parseWorkDays(workDays);
+  if (!d.length) return "no working days";
+  const consecutive = d.every((x, i) => i === 0 || x === d[i - 1] + 1);
+  return consecutive && d.length > 2 ? `${DAY_NAMES[d[0]]}–${DAY_NAMES[d[d.length - 1]]}` : d.map((x) => DAY_NAMES[x]).join(", ");
+}
+export const paidHoursPerDay = (s: Pick<Schedule, "workStart" | "workEnd" | "breakMinutes">) => Math.max(0, (hhmmToMinutes(s.workEnd) - hhmmToMinutes(s.workStart) - s.breakMinutes) / 60);
+/** Plain-English statement of what a contract expects, shown to employees and managers. */
+export const describeSchedule = (s: Schedule) =>
+  `Work ${s.workStart}–${s.workEnd}, ${describeDays(s.workDays)}, with a ${s.breakMinutes}-minute break. Clocking in more than ${s.lateGraceMinutes} minutes after ${s.workStart} is recorded as late. Time worked after ${s.workEnd} (or on a non-working day) counts as overtime at ${(s.overtimeRateBps / 10000).toFixed(2).replace(/\.?0+$/, "")}× your hourly rate once your employer approves it.`;
+
+/** Hourly rate (UGX) derived from the contract's monthly salary and its own schedule. */
+export function hourlyRate(monthlySalary: number, s: Schedule): number {
+  const daysPerWeek = Math.max(1, parseWorkDays(s.workDays).length);
+  const hours = paidHoursPerDay(s) || 8;
+  return monthlySalary / ((daysPerWeek * 52) / 12) / hours;
+}
+export const overtimePayFor = (minutes: number, monthlySalary: number, s: Schedule) => Math.round((minutes / 60) * hourlyRate(monthlySalary, s) * (s.overtimeRateBps / 10000));
+
+/** Lateness + overtime for one day, measured against THIS contract's schedule in the organisation's timezone. */
+export function dayMetrics(s: Schedule, tz: string, workDate: string, clockIn: Date | null, clockOut: Date | null) {
+  const working = isWorkDay(workDate, s.workDays);
+  let lateMinutes = 0, overtimeMinutes = 0;
+  if (clockIn && working) {
+    const diff = Math.floor((clockIn.getTime() - zonedToUtc(workDate, s.workStart, tz).getTime()) / 60_000);
+    if (diff > s.lateGraceMinutes) lateMinutes = diff;
+  }
+  if (clockIn && clockOut) {
+    const raw = working
+      ? Math.floor((clockOut.getTime() - zonedToUtc(workDate, s.workEnd, tz).getTime()) / 60_000)
+      : Math.floor((clockOut.getTime() - clockIn.getTime()) / 60_000);
+    overtimeMinutes = raw >= OVERTIME_MIN_MINUTES ? Math.min(raw, OVERTIME_CAP_MINUTES) : 0;
+  }
+  return { status: lateMinutes > 0 ? "late" : "present", lateMinutes, overtimeMinutes, working };
+}
+export const fmtMinutes = (m: number) => (m <= 0 ? "—" : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`);

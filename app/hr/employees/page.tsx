@@ -16,7 +16,7 @@ export default async function Employees() {
   const d = await tdb(async (tx, t) => {
     const today = localParts(new Date(), t.timezone).ymd;
     const emps = await activeEmployees(tx, s);
-    const days = await dayStatus(tx, t, today, emps.map((e) => ({ id: e.id, workerId: e.workerId })));
+    const days = await dayStatus(tx, t, today, emps);
     const names = emps.length ? await tx.select({ id: users.id, first: users.firstName, last: users.lastName }).from(users).where(inArray(users.id, [...new Set(emps.map((e) => e.employerId))])) : [];
     const bal = new Map(await Promise.all(emps.map(async (e) => [e.id, (await leaveBalances(tx, t, e.workerId, Number(today.slice(0, 4)))).find((b) => b.type === "annual")] as const)));
     return { emps, days, names, bal };

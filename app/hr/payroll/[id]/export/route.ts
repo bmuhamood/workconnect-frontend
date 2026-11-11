@@ -16,7 +16,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     return { run, rows };
   });
   if (!out) return new Response("Not found", { status: 404 });
-  const head = ["Employee", "Email", "Basic", "Unpaid leave days", "Unpaid leave deduction", "Allowances", "Other deductions", "Gross", "PAYE", "Employee NSSF", "Net pay", "Employer NSSF"];
-  const lines = out.rows.map(({ l, first, last, email }) => [`${first} ${last}`, email, l.basic, l.unpaidDays, l.unpaidDeduction, l.allowances, l.otherDeductions, l.gross, l.paye, l.nssfEmployee, l.netPay, l.nssfEmployer].map(q).join(","));
+  const head = ["Employee", "Email", "Basic", "Unpaid leave days", "Unpaid leave deduction", "Overtime hours", "Overtime pay", "Allowances", "Other deductions", "Gross", "PAYE", "Employee NSSF", "Net pay", "Employer NSSF"];
+  const lines = out.rows.map(({ l, first, last, email }) => [`${first} ${last}`, email, l.basic, l.unpaidDays, l.unpaidDeduction, (l.overtimeMinutes / 60).toFixed(2), l.overtimePay, l.allowances, l.otherDeductions, l.gross, l.paye, l.nssfEmployee, l.netPay, l.nssfEmployer].map(q).join(","));
   return new Response([head.map(q).join(","), ...lines].join("\r\n"), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="payroll-${out.run.period}.csv"` } });
 }

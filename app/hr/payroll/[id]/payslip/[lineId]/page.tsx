@@ -9,18 +9,18 @@ import { ugx } from "@/lib/format";
 
 export default async function Payslip({ params }: { params: Promise<{ id: string; lineId: string }> }) {
   const { id, lineId } = await params;
-  const s = await requireSession(["admin", "worker"]);
+  const s = await requireSession(["admin", "worker", "employer"]);
   if (!/^[0-9a-f-]{36}$/i.test(id) || !/^[0-9a-f-]{36}$/i.test(lineId)) notFound();
   const d = await tdb(async (tx, t) => {
     const [row] = await tx.select({ l: payrollLines, run: payrollRuns }).from(payrollLines).innerJoin(payrollRuns, eq(payrollRuns.id, payrollLines.runId)).where(and(eq(payrollLines.id, lineId), eq(payrollRuns.id, id))).limit(1);
-    if (!row || (s.role === "worker" && (row.l.workerId !== s.userId || row.run.status === "draft"))) return null;
+    if (!row || (s.role === "worker" && row.l.workerId !== s.userId) || (s.role === "employer" && row.l.employerId !== s.userId) || (s.role !== "admin" && row.run.status === "draft")) return null;
     const [w] = await tx.select({ first: users.firstName, last: users.lastName, email: users.email }).from(users).where(eq(users.id, row.l.workerId));
     const [c] = await tx.select({ title: contracts.title }).from(contracts).where(eq(contracts.id, row.l.contractId));
     return { ...row, w, c, t };
   });
   if (!d) notFound();
   const { l, run, w, c, t } = d;
-  const rows: [string, number, boolean?][] = [["Basic salary", l.basic], ...(l.allowances ? [["Allowances", l.allowances] as [string, number]] : []), ...(l.unpaidDeduction ? [[`Unpaid leave (${l.unpaidDays} day${l.unpaidDays === 1 ? "" : "s"})`, -l.unpaidDeduction] as [string, number]] : [])];
+  const rows: [string, number, boolean?][] = [["Basic salary", l.basic], ...(l.overtimePay ? [[`Overtime (${Math.floor(l.overtimeMinutes / 60)}h ${String(l.overtimeMinutes % 60).padStart(2, "0")}m, approved)`, l.overtimePay] as [string, number]] : []), ...(l.allowances ? [["Allowances", l.allowances] as [string, number]] : []), ...(l.unpaidDeduction ? [[`Unpaid leave (${l.unpaidDays} day${l.unpaidDays === 1 ? "" : "s"})`, -l.unpaidDeduction] as [string, number]] : [])];
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex items-center justify-between print:hidden"><Link href={s.role === "admin" ? `/hr/payroll/${run.id}` : "/hr/payroll"} className="text-sm text-slate-500 hover:text-slate-800">← Back</Link><PrintButton /></div>
