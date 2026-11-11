@@ -17,7 +17,7 @@ export function OpsPreview() {
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3"><div className="mb-2 text-[11px] text-slate-500">Payroll · November</div>
               <div className="space-y-2 text-xs">{["Calculated", "Approved", "Paid"].map((s, i) => <div key={s} className="flex items-center gap-2"><span className={cn("grid size-4 place-items-center rounded-full", i < 2 ? "bg-signal/25 text-signal" : "bg-slate-200 text-slate-400")}>{i < 2 && <Check className="size-2.5" />}</span><span className={i < 2 ? "text-slate-700" : "text-slate-400"}>{s}</span></div>)}</div></div>
           </div>
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs"><span className="text-slate-500">Leave awaiting approval</span><span className="flex gap-2"><span className="rounded-md bg-gradient-to-br from-brand-600 to-[#6a4fe6] px-2.5 py-1 font-medium text-onbrand">Approve</span><span className="rounded-md border border-slate-300/60 px-2.5 py-1 text-slate-600">Reject</span></span></div>
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs"><span className="text-slate-500">Leave awaiting approval</span><span className="flex gap-2"><span className="rounded-md bg-gradient-to-br from-brand-600 to-brand-700 px-2.5 py-1 font-medium text-onbrand">Approve</span><span className="rounded-md border border-slate-300/60 px-2.5 py-1 text-slate-600">Reject</span></span></div>
         </div>
       </div>
     </div>

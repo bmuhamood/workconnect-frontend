@@ -7,15 +7,15 @@ import { initials } from "@/lib/format";
 export const cn = (...a: Parameters<typeof clsx>) => twMerge(clsx(a));
 
 const variants = {
-  primary: "bg-gradient-to-br from-brand-600 to-[#6a4fe6] text-onbrand shadow-[0_8px_24px_-8px_rgba(79,92,245,.8)] hover:brightness-110 active:scale-[.98]",
-  secondary: "bg-slate-100/60 text-slate-800 border border-slate-300/60 hover:border-brand-400/60 hover:bg-slate-100",
+  primary: "bg-brand-600 text-onbrand font-semibold shadow-sm hover:bg-brand-700 active:scale-[.98]",
+  secondary: "bg-white text-slate-800 border-[1.5px] border-slate-300 hover:border-brand-500 hover:bg-slate-100",
   ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-  danger: "bg-rose-600 text-onbrand hover:bg-rose-500",
+  danger: "bg-rose-600 text-onbrand font-semibold hover:brightness-110",
   soft: "bg-brand-50 text-accent hover:bg-brand-100",
 };
 export const btn = (v: keyof typeof variants = "primary", size: "sm" | "md" | "lg" = "md") =>
-  cn("inline-flex items-center justify-center gap-2 rounded-xl font-medium transition disabled:opacity-60 disabled:pointer-events-none",
-    size === "sm" ? "px-3 py-1.5 text-sm" : size === "lg" ? "px-6 py-3 text-base" : "px-4 py-2.5 text-sm", variants[v]);
+  cn("btn inline-flex items-center justify-center gap-2 rounded-xl font-medium transition disabled:opacity-60 disabled:pointer-events-none",
+    size === "sm" ? "min-h-10 px-3.5 py-2 text-sm" : size === "lg" ? "min-h-12 px-6 py-3 text-base" : "min-h-11 px-4 py-2.5 text-[0.95rem]", variants[v]);
 
 export function LinkButton({ href, variant, size, className, children }: { href: string; variant?: keyof typeof variants; size?: "sm" | "md" | "lg"; className?: string; children: React.ReactNode }) {
   return <Link href={href} className={cn(btn(variant, size), className)}>{children}</Link>;
@@ -27,7 +27,7 @@ const tones: Record<string, string> = {
   blue: "bg-brand-50 text-accent ring-brand-600/20",
 };
 export const Badge = ({ tone = "gray", children, className }: { tone?: keyof typeof tones; children: React.ReactNode; className?: string }) =>
-  <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ring-transparent", tones[tone], className)}>{children}</span>;
+  <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.8rem] font-semibold ring-1 ring-inset ring-transparent", tones[tone], className)}>{children}</span>;
 
 const statusTone: Record<string, keyof typeof tones> = {
   open: "green", active: "green", paid: "green", accepted: "green", completed: "blue", shortlisted: "blue",

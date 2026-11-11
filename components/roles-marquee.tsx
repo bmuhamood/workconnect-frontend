@@ -1,6 +1,6 @@
 const ROWS: string[][] = [
-  ["General workers", "Cleaners", "Drivers", "Warehouse staff", "Technicians", "Supervisors"],
-  ["Administrators", "Accountants", "IT professionals", "Managers", "Skilled professionals", "And more"],
+  ["Nannies", "Maids", "Caregivers", "Chefs", "Waiters", "Housekeepers", "Security guards", "Drivers", "Gardeners", "Cleaners"],
+  ["Cashiers", "Teachers", "Electricians", "Welders", "Machine operators", "Photographers", "Beauty therapists", "IT professionals", "Sales executives", "And more"],
 ];
 /** Two opposing, pausable tickers of the roles we recruit for. The duplicate set is hidden from assistive tech. */
 export function RolesMarquee() {

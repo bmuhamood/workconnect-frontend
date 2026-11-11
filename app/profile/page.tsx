@@ -21,7 +21,7 @@ export default async function Profile() {
       <PageHeader title="Your profile" subtitle={d.u.email} action={d.w?.verified ? <Badge tone="green">Verified</Badge> : undefined} />
       <div className="card mb-4 p-6"><AvatarUpload name={`${d.u.first} ${d.u.last}`} src={d.u.avatar} /></div>
       <div className="card p-6">
-        <AjaxForm url="/api/profile" success="Profile saved">
+        <AjaxForm url="/api/profile" method="PATCH" sendEmpty success="Profile saved">
           <div className="grid gap-4 sm:grid-cols-2"><Field label="First name"><input name="firstName" required defaultValue={d.u.first} className="input" /></Field><Field label="Last name"><input name="lastName" required defaultValue={d.u.last} className="input" /></Field></div>
           {d.w && <>
             <Field label="Profession"><input name="profession" defaultValue={d.w.profession} className="input" /></Field>

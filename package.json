@@ -9,9 +9,10 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx db/migrate.ts",
     "db:seed": "tsx db/seed.ts",
-    "db:setup": "npm run db:migrate && npm run db:seed",
+    "db:setup": "npm run db:migrate && npm run db:seed:reset",
     "test:isolation": "tsx --conditions=react-server scripts/test-isolation.mts",
-    "test:hr": "tsx scripts/test-hr-calc.mts"
+    "test:hr": "tsx scripts/test-hr-calc.mts",
+    "db:seed:reset": "tsx db/seed.ts --reset"
   },
   "dependencies": {
     "@neon/auth": "^0.8.2",

@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { getSession, type Session } from "@/lib/session";
+import { getSession, getPlatformAdmin, type Session, type PlatformAdmin } from "@/lib/session";
 import { withTenant, type Tx } from "@/lib/db";
 
 export class ApiError extends Error {
@@ -27,6 +27,21 @@ export function route<P = Record<string, string>>(
       if (opts.roles && !opts.roles.includes(session.role)) throw fail(403, "You don't have access to this action");
       const params = (await ctx?.params) as P;
       const out = await withTenant({ tenantId: session.tenantId, userId: session.userId }, (db) => fn(req, { params, session, db }));
+      return out instanceof Response ? out : NextResponse.json(out ?? { ok: true });
+    } catch (e) {
+      return errorResponse(e);
+    }
+  };
+}
+
+/** Platform (Super WorkConnect Admin) routes: not tenant-scoped, so they use the unscoped connection on purpose. */
+export function platformRoute<P = Record<string, string>>(fn: (req: Request, ctx: { params: P; admin: PlatformAdmin }) => Promise<unknown>) {
+  return async (req: Request, ctx: Ctx<P>) => {
+    try {
+      const admin = await getPlatformAdmin();
+      if (!admin) throw fail(403, "Platform administrators only");
+      const params = (await ctx?.params) as P;
+      const out = await fn(req, { params, admin });
       return out instanceof Response ? out : NextResponse.json(out ?? { ok: true });
     } catch (e) {
       return errorResponse(e);

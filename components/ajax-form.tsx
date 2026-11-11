@@ -10,9 +10,9 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 }
 
 /** JSON form: collects named inputs, POSTs/PATCHes them, shows inline + toast errors, then redirects/refreshes. */
-export function AjaxForm({ url, method = "POST", submit = "Save", success, redirect, extra, className, children, reset }: {
+export function AjaxForm({ url, method = "POST", submit = "Save", success, redirect, extra, className, children, reset, sendEmpty }: {
   url: string; method?: string; submit?: string; success?: string; redirect?: string; extra?: Record<string, unknown>;
-  className?: string; children: React.ReactNode; reset?: boolean;
+  className?: string; children: React.ReactNode; reset?: boolean; sendEmpty?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -21,7 +21,7 @@ export function AjaxForm({ url, method = "POST", submit = "Save", success, redir
     e.preventDefault();
     const form = e.currentTarget;
     const data: Record<string, unknown> = {};
-    new FormData(form).forEach((v, k) => { if (typeof v === "string" && v !== "") data[k] = v; });
+    new FormData(form).forEach((v, k) => { if (typeof v === "string" && (sendEmpty || v !== "")) data[k] = v; });
     setBusy(true); setError("");
     try {
       const out = await call<{ id?: string }>(url, method, { ...data, ...extra });

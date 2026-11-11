@@ -2,7 +2,7 @@ import "server-only";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
-import { AUTH_MODE, assertAuthConfigured } from "@/lib/auth-mode";
+import { AUTH_MODE, LOCAL_PASSWORDS, assertAuthConfigured } from "@/lib/auth-mode";
 
 export type Identity = { authId: string; email: string; name: string };
 const COOKIE = "wc_local_session";
@@ -22,6 +22,17 @@ export async function getIdentity(): Promise<Identity | null> {
     console.error("[auth]", (e as Error).message);
     return null;
   }
+  // 1) App-managed password session (local dev, or seeded demo accounts when ENABLE_DEMO_LOGIN=1).
+  if (LOCAL_PASSWORDS) {
+    const token = (await cookies()).get(COOKIE)?.value;
+    if (token) {
+      try {
+        const { payload } = await jwtVerify(token, secret());
+        if (payload.sub) return { authId: payload.sub, email: String(payload.email), name: String(payload.name ?? "") };
+      } catch { /* expired or invalid: fall through */ }
+    }
+  }
+  // 2) Neon Auth session.
   if (AUTH_MODE === "neon") {
     try {
       const { neonAuth } = await import("@/lib/neon-auth");
@@ -33,12 +44,7 @@ export async function getIdentity(): Promise<Identity | null> {
       return null;
     }
   }
-  const token = (await cookies()).get(COOKIE)?.value;
-  if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, secret());
-    return payload.sub ? { authId: payload.sub, email: String(payload.email), name: String(payload.name ?? "") } : null;
-  } catch { return null; }
+  return null;
 }
 
 // ---- local development auth (never used when Neon Auth is configured) ----
