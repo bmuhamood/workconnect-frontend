@@ -54,6 +54,17 @@ const cA = await withTenant({ tenantId: A.id }, (tx) => tx.select().from(contact
 const cB = await withTenant({ tenantId: B.id }, (tx) => tx.select().from(contactMessages));
 check("contact inbox: each tenant sees only its own messages", cA.every((m) => m.tenantId === A.id) && cB.every((m) => m.tenantId === B.id) && cA.length >= 1 && cB.length >= 1);
 await rootDb.delete(contactMessages).where(eq(contactMessages.topic, "t"));
+// HR tables are tenant-isolated too
+const { servicePackages, supportTickets } = await import("../db/schema");
+await rootDb.insert(servicePackages).values([{ tenantId: A.id, name: "pkg-A", priceText: "x" }, { tenantId: B.id, name: "pkg-B", priceText: "x" }]);
+await rootDb.insert(supportTickets).values([{ tenantId: A.id, requesterId: adminA.id, category: "Other", subject: "ticket-A" }, { tenantId: B.id, requesterId: adminA.id, category: "Other", subject: "ticket-B" }]);
+const pA = await withTenant({ tenantId: A.id }, (tx) => tx.select().from(servicePackages)), pB = await withTenant({ tenantId: B.id }, (tx) => tx.select().from(servicePackages));
+check("packages: each tenant sees only its own", pA.every((p) => p.tenantId === A.id) && pB.every((p) => p.tenantId === B.id) && pA.some((p) => p.name === "pkg-A") && !pA.some((p) => p.name === "pkg-B"));
+const tA = await withTenant({ tenantId: A.id }, (tx) => tx.select().from(supportTickets));
+check("tickets: tenant A cannot see tenant B's tickets", tA.every((x) => x.tenantId === A.id) && !tA.some((x) => x.subject === "ticket-B"));
+let crossIns = false; try { await withTenant({ tenantId: A.id }, (tx) => tx.insert(supportTickets).values({ tenantId: B.id, requesterId: adminA.id, category: "Other", subject: "x" })); } catch { crossIns = true; }
+check("tickets: cannot insert into another tenant", crossIns);
+await rootDb.delete(servicePackages).where(eq(servicePackages.priceText, "x")); await rootDb.delete(supportTickets).where(eq(supportTickets.category, "Other"));
 await rootDb.delete(notifications).where(eq(notifications.title, "t"));
 console.log(failed ? `\n${failed} FAILED` : "\nAll isolation checks passed");
 process.exit(failed ? 1 : 0);

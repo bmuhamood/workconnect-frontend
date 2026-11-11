@@ -10,7 +10,8 @@
     "db:migrate": "tsx db/migrate.ts",
     "db:seed": "tsx db/seed.ts",
     "db:setup": "npm run db:migrate && npm run db:seed",
-    "test:isolation": "tsx --conditions=react-server scripts/test-isolation.mts"
+    "test:isolation": "tsx --conditions=react-server scripts/test-isolation.mts",
+    "test:hr": "tsx scripts/test-hr-calc.mts"
   },
   "dependencies": {
     "@neon/auth": "^0.8.2",

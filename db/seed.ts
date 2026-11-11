@@ -6,7 +6,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import * as s from "./schema";
-import { DEFAULT_CATEGORIES } from "../lib/domain-constants";
+import { DEFAULT_CATEGORIES, DEFAULT_PACKAGES } from "../lib/domain-constants";
 
 const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is not set");
@@ -40,6 +40,7 @@ async function main() {
   for (const T of DATA) {
     const [t] = await db.insert(s.tenants).values({ name: T.name, slug: T.slug, brandColor: T.color }).returning();
     const cats = await db.insert(s.categories).values(DEFAULT_CATEGORIES.map(([name, slug, icon]) => ({ tenantId: t.id, name, slug, icon }))).returning();
+    await db.insert(s.servicePackages).values(DEFAULT_PACKAGES.map((p, i) => ({ tenantId: t.id, ...p, features: [...p.features], sortOrder: i })));
     const cat = (slug: string) => cats.find((c) => c.slug === slug)!.id;
     const admin = await mkUser(`admin@${T.slug}.ug`, "Admin", T.name.split(" ")[0]);
     await db.insert(s.memberships).values({ tenantId: t.id, userId: admin.id, role: "admin" });

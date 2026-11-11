@@ -24,13 +24,11 @@ export async function Navbar() {
   } catch (e) {
     console.error("[navbar] could not load session/tenant:", (e as Error).message);
   }
-  const links = [
-    { href: "/#services", label: "Services" }, { href: "/jobs", label: "Find jobs" }, { href: "/workers", label: "Find workers" },
-    ...(s ? [{ href: "/dashboard", label: "Dashboard" }, { href: "/messages", label: "Messages" }, ...(s.role === "admin" ? [{ href: "/admin", label: "Admin" }] : [])] : []),
-    { href: "/about", label: "About" }, { href: "/contact", label: "Contact" },
-  ];
+  const links = s
+    ? [{ href: "/dashboard", label: "Dashboard" }, { href: "/hr", label: "HR Operations" }, { href: "/jobs", label: "Jobs" }, { href: "/workers", label: "Talent" }, { href: "/messages", label: "Messages" }, ...(s.role === "admin" ? [{ href: "/admin", label: "Admin" }] : [])]
+    : [{ href: "/services", label: "Services" }, { href: "/packages", label: "Packages" }, { href: "/jobs", label: "Jobs" }, { href: "/workers", label: "Talent" }, { href: "/about", label: "About" }, { href: "/contact", label: "Contact" }];
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-[#060913]/70 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 print:hidden border-b border-slate-200/70 bg-[#060913]/70 backdrop-blur-xl">
       <div className="container-x flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2 text-lg font-bold tracking-tight">
           <LogoMark />

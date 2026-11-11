@@ -2,7 +2,7 @@ import "server-only";
 import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import type { Tx } from "@/lib/db";
-import { notifications, conversations, users, tenants } from "@/db/schema";
+import { notifications, conversations, users, tenants, memberships } from "@/db/schema";
 import { queueEmail, templates, brandOf, appUrl, flushOutbox } from "@/lib/email";
 
 export const serviceFee = (salary: number, bps: number) => Math.round((salary * bps) / 10000);
@@ -18,6 +18,12 @@ export async function notify(tx: Tx, userId: string, o: NotifyOpts) {
   const cta = o.link ? { label: "Open in WorkConnect", url: appUrl() + o.link } : undefined;
   await queueEmail(tx, { email: u.email, name: u.first }, templates.notice(brandOf(t), { title: o.title, body: `Hi ${u.first},\n\n${o.body ?? o.title}`, cta, followUp: o.followUp }), o.followUp ? "followup" : "notice");
   after(() => flushOutbox(10));
+}
+
+/** In-app notification (and optional email) to every admin of the current tenant. */
+export async function notifyAdmins(tx: Tx, o: NotifyOpts) {
+  const admins = await tx.select({ id: memberships.userId }).from(memberships).where(eq(memberships.role, "admin"));
+  for (const a of admins) await notify(tx, a.id, o);
 }
 
 export async function getOrCreateConversation(tx: Tx, a: string, b: string) {

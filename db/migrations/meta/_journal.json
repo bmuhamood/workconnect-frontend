@@ -29,6 +29,13 @@
       "when": 1794305387882,
       "tag": "0003_contact",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794340378455,
+      "tag": "0004_hr_ops",
+      "breakpoints": true
     }
   ]
 }

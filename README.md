@@ -8,6 +8,12 @@ Multi-tenant hiring marketplace (Next.js 16 · Neon Postgres · Neon Auth · Dri
 - **Auth**: Neon Auth (Managed Better Auth). Without `NEON_AUTH_BASE_URL`, a local email/password fallback is used for development and is refused in production.
 - **Email**: transactional + marketing + follow-ups are queued in `email_outbox`, sent via Resend (retries up to 5×), with a daily Vercel Cron (`/api/cron/emails`) for reminders. Auth emails (verification/reset) are sent by Neon Auth.
 
+## HR Operations (`/hr`)
+Leave (entitlements, requests, approvals, balances, team calendar), attendance (self clock-in/out, lateness vs working hours, manager corrections), payroll (monthly runs, PAYE + NSSF + unpaid-leave deductions, allowances, approval, payslips, CSV), and an HR helpdesk. Settings live at `/hr/settings`.
+- **Payroll safety:** PAYE bands and NSSF rates are editable per organisation and an admin must confirm them before a run can be approved; changing a rate removes the confirmation. Defaults are a starting point only. Check them against URA/NSSF guidance.
+- `npm run test:hr` unit-tests the payroll maths against a published worked example.
+- Service packages are managed at `/admin/packages` and shown on `/packages` and the home page.
+
 ## Setup
 ```bash
 npm install

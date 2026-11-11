@@ -3,13 +3,13 @@ import { after, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { rootDb, withTenant } from "@/lib/db";
-import { users, tenants, memberships, workerProfiles, employerProfiles, categories } from "@/db/schema";
+import { users, tenants, memberships, workerProfiles, employerProfiles, categories, servicePackages } from "@/db/schema";
 import { getIdentity } from "@/lib/identity";
 import { currentTenant } from "@/lib/tenant";
 import { TENANT_COOKIE } from "@/lib/session";
 import { errorResponse, fail, body } from "@/lib/http";
 import { queueEmail, templates, brandOf, appUrl, flushOutbox } from "@/lib/email";
-import { DEFAULT_CATEGORIES } from "@/lib/domain-constants";
+import { DEFAULT_CATEGORIES, DEFAULT_PACKAGES } from "@/lib/domain-constants";
 
 const phone = z.string().trim().transform((s) => s.replace(/[\s-]/g, "")).refine((s) => /^\+?[0-9]{9,15}$/.test(s), "Enter a valid phone number");
 const schema = z.discriminatedUnion("role", [
@@ -39,7 +39,10 @@ export async function POST(req: Request) {
       let slug = slugify(d.agencyName);
       if ((await rootDb.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, slug)).limit(1)).length) slug += "-" + Math.random().toString(36).slice(2, 6);
       [tenant] = await rootDb.insert(tenants).values({ name: d.agencyName, slug }).returning();
-      await withTenant({ tenantId: tenant.id, userId: user.id }, (tx) => tx.insert(categories).values(DEFAULT_CATEGORIES.map(([name, slug, icon]) => ({ name, slug, icon }))));
+      await withTenant({ tenantId: tenant.id, userId: user.id }, async (tx) => {
+        await tx.insert(categories).values(DEFAULT_CATEGORIES.map(([name, slug, icon]) => ({ name, slug, icon })));
+        await tx.insert(servicePackages).values(DEFAULT_PACKAGES.map((p, i) => ({ ...p, features: [...p.features], sortOrder: i })));
+      });
       role = "admin";
     } else {
       const t = await currentTenant();

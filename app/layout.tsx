@@ -5,8 +5,8 @@ import { Footer } from "@/components/footer";
 import { ToastHost } from "@/components/toast-host";
 
 export const metadata: Metadata = {
-  title: { default: "WorkConnect — Hire trusted workers in Uganda", template: "%s · WorkConnect" },
-  description: "Find verified house help, nannies, drivers, cooks and more — with contracts, payments and reviews built in.",
+  title: { default: "WorkConnect — HR Consulting & Workforce Management", template: "%s · WorkConnect" },
+  description: "HR consulting and workforce management: recruitment, employment contracts, payroll, leave, attendance and HR support.",
 };
 // Every page depends on the signed-in user / tenant, so render per request.
 export const dynamic = "force-dynamic";
