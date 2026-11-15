@@ -1,16 +1,12 @@
 import Link from "next/link";
-import { desc, eq, sql } from "drizzle-orm";
 import { ArrowRight, ShieldCheck, FileSignature, Wallet, CalendarCheck, Clock, LifeBuoy, Lock, Landmark, Smartphone, Building2, Check, Handshake } from "lucide-react";
-import { tdb } from "@/lib/tenant";
-import { jobs, workerProfiles, users, contracts } from "@/db/schema";
-import { LinkButton, Avatar, Stars, Badge } from "@/components/ui";
+import { LinkButton, Badge } from "@/components/ui";
 import { OpsPreview } from "@/components/ops-preview";
 import { ServicesExplorer } from "@/components/services-explorer";
 import { RolesMarquee } from "@/components/roles-marquee";
 import { PackagesGrid } from "@/components/packages-grid";
 import { Faq } from "@/components/faq";
-import { getPackages } from "@/lib/packages";
-import { ugxRange, rating } from "@/lib/format";
+import { getPlatformPackages, publicStats } from "@/lib/platform";
 import { COMPANY, RECRUITMENT_STEPS, PERSONNEL, HR_OUTSOURCING, TRAINING, WHY_US, INDUSTRIES, PARTNERS, GLOBIS } from "@/lib/company";
 
 const MODULES = [
@@ -19,22 +15,13 @@ const MODULES = [
   { Icon: Clock, title: "Attendance & overtime", text: "One-tap clock in and out. Lateness and overtime are measured against the exact working hours in each employee's contract, approved by the client and paid through payroll.", span: "" },
   { Icon: LifeBuoy, title: "HR helpdesk", text: "Staff raise payroll, leave and contract questions. HR answers in one threaded place, with email updates.", span: "lg:col-span-2" },
 ];
-const TRUST = [[Lock, "Private workspace", "Each organisation's data is isolated at database level"], [Landmark, "PAYE & NSSF aware", "Rates you confirm before payroll is approved"], [FileSignature, "Digital contracts", "Offer, e-sign and activate without paperwork"], [Smartphone, "Mobile money", "MTN MoMo and Airtel Money supported"]] as const;
+const TRUST = [[Lock, "Private workspace per client", "Each client's data is isolated at database level"], [Landmark, "PAYE & NSSF aware", "Rates you confirm before payroll is approved"], [FileSignature, "Digital contracts", "Offer, e-sign and activate without paperwork"], [Smartphone, "Mobile money", "MTN MoMo and Airtel Money supported"]] as const;
 
 export default async function Home() {
-  // The landing page never depends on the database: if it is empty or unreachable we still show the full company story.
-  const data = await tdb(async (tx) => {
-    const [pool] = await tx.select({ workers: sql<number>`count(*)::int`, verified: sql<number>`count(*) filter (where verified)::int` }).from(workerProfiles);
-    const [live] = await tx.select({ n: sql<number>`count(*)::int` }).from(contracts).where(eq(contracts.status, "active"));
-    const [open] = await tx.select({ n: sql<number>`count(*)::int` }).from(jobs).where(eq(jobs.status, "open"));
-    return {
-      pool, live: live.n, open: open.n, packages: await getPackages(tx),
-      workers: await tx.select({ id: users.id, first: users.firstName, last: users.lastName, avatar: users.avatarUrl, p: workerProfiles }).from(workerProfiles).innerJoin(users, eq(users.id, workerProfiles.userId)).orderBy(desc(workerProfiles.verified), desc(workerProfiles.ratingAvg)).limit(4),
-      jobs: await tx.select().from(jobs).where(eq(jobs.status, "open")).orderBy(desc(jobs.createdAt)).limit(3),
-    };
-  }).catch(() => null);
-
-  const facts: [string, number][] = data ? [["Employees under management", data.live], ["Verified candidates", data.pool.verified], ["Roles open now", data.open]] : [];
+  // The public site is WorkConnect's own. It reads only WorkConnect's packages and aggregate counts, never client data,
+  // and never fails if the database is empty or unreachable.
+  const [packages, stats] = await Promise.all([getPlatformPackages().catch(() => []), publicStats().catch(() => null)]);
+  const facts: [string, number][] = stats ? ([["Client organisations", stats.clients], ["Employees under management", stats.employees]] as [string, number][]).filter(([, n]) => n > 0) : [];
   return (
     <>
       <section className="container-x grid items-center gap-14 py-16 sm:py-24 lg:grid-cols-[1.05fr_1fr]">
@@ -44,8 +31,8 @@ export default async function Home() {
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-slate-600">Professionally screened, well-trained people for homes, hotels, schools, hospitals, offices and industry, plus the HR outsourcing, payroll and workforce management to keep them working well.</p>
           <div className="mt-9 flex flex-wrap gap-3">
             <LinkButton href="/contact?topic=consultation" size="lg">Book a consultation <ArrowRight className="size-4" aria-hidden="true" /></LinkButton>
-            <LinkButton href="/workers" variant="secondary" size="lg">Browse talent</LinkButton>
-            <LinkButton href="/register?as=organisation" variant="secondary" size="lg"><Building2 className="size-4" aria-hidden="true" />Register your HR firm</LinkButton>
+            <LinkButton href="/packages" variant="secondary" size="lg">View packages</LinkButton>
+            <LinkButton href="/login" variant="ghost" size="lg"><Building2 className="size-4" aria-hidden="true" />Client login</LinkButton>
           </div>
           {facts.length > 0 && <dl className="mt-12 flex flex-wrap gap-x-10 gap-y-4 text-sm">{facts.map(([k, v]) => <div key={k}><dd className="font-display text-2xl font-semibold">{v}</dd><dt className="text-slate-500">{k}</dt></div>)}</dl>}
         </div>
@@ -92,10 +79,19 @@ export default async function Home() {
         </div>
       </section>
 
-      {data && data.packages.length > 0 && (
+      <section id="workspace" className="container-x scroll-mt-24 pb-20">
+        <div className="grid items-start gap-10 lg:grid-cols-[1fr_1.1fr]">
+          <div><h2 className="text-2xl font-bold sm:text-4xl">Every client gets a private workspace</h2>
+            <p className="mt-4 leading-relaxed text-slate-600">We run HR for many organisations at once, and each one's information stays completely separate. Your employees, contracts, payroll, leave and attendance live in your own space. No other client can ever see them, and we can't mix them up.</p>
+            <ul className="mt-6 space-y-3 text-slate-700">{["Separate data for every client, enforced in the database itself", "Your administrator invites your managers and employees", "Managers see only their own team; employees see only their own records", "When a WorkConnect consultant works in your space, you can see it and it is logged"].map((t) => <li key={t} className="flex gap-3"><Check className="mt-1 size-4 shrink-0 text-signal" aria-hidden="true" /><span>{t}</span></li>)}</ul></div>
+          <div className="card divide-y divide-slate-200 text-sm">{[["Your administrator", "Sets up the workspace, invites people, approves, and sees everything in your organisation"], ["Your managers", "Monitor and approve for their own employees only"], ["Your employees", "Clock in, request leave, read payslips and raise HR questions"], ["WorkConnect consultants", "Deliver payroll, recruitment and HR support inside your workspace, with a visible record"]].map(([t, d]) => <div key={t} className="flex gap-4 p-5"><span className="mt-0.5 size-2.5 shrink-0 rounded-full bg-signal" aria-hidden="true" /><div><div className="font-semibold">{t}</div><div className="mt-0.5 text-slate-600">{d}</div></div></div>)}</div>
+        </div>
+      </section>
+
+      {packages.length > 0 && (
         <section id="packages" className="container-x scroll-mt-24 pb-20">
           <div className="max-w-2xl"><h2 className="text-2xl font-bold sm:text-4xl">Packages that grow with your team</h2><p className="mt-4 text-slate-600">Start with recruitment, add workforce management, or hand over HR entirely. Every package is quoted to your headcount and scope.</p></div>
-          <div className="mt-12"><PackagesGrid packages={data.packages} /></div>
+          <div className="mt-12"><PackagesGrid packages={packages} /></div>
         </section>)}
 
       <section className="container-x pb-20">
@@ -119,21 +115,12 @@ export default async function Home() {
         </div>
       </section>
 
-      {data && data.workers.length > 0 && (
-        <section className="container-x pb-20">
-          <div className="flex items-end justify-between gap-4"><h2 className="text-2xl font-bold sm:text-3xl">Our talent network</h2><Link href="/workers" className="inline-flex items-center gap-1 font-medium text-accent hover:text-accent-strong">Browse candidates <ArrowRight className="size-4" aria-hidden="true" /></Link></div>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{data.workers.map((w) => (
-            <Link key={w.id} href={`/workers/${w.id}`} className="card p-5"><div className="flex items-center gap-3"><Avatar name={`${w.first} ${w.last}`} src={w.avatar} size={46} /><div className="min-w-0"><div className="truncate font-semibold">{w.first} {w.last}</div><div className="truncate text-sm text-slate-500">{w.p.profession}</div></div></div>
-              <div className="mt-5 flex items-center justify-between"><Stars value={Number(rating(w.p.ratingAvg))} count={w.p.reviewsCount} />{w.p.verified && <Badge tone="green"><ShieldCheck className="size-3" aria-hidden="true" />Verified</Badge>}</div></Link>))}</div>
-          {data.jobs.length > 0 && <div className="mt-6 grid gap-4 md:grid-cols-3">{data.jobs.map((j) => <Link key={j.id} href={`/jobs/${j.id}`} className="card p-5"><div className="font-semibold">{j.title}</div><div className="mt-1 text-sm text-slate-500">{j.location}</div><div className="mt-3 text-sm font-medium text-accent">{ugxRange(j.salaryMin, j.salaryMax)}</div></Link>)}</div>}
-        </section>)}
-
       <section className="container-x pb-20"><h2 className="mb-8 text-2xl font-bold sm:text-3xl">Questions we're often asked</h2><Faq /></section>
 
       <section className="container-x pb-4">
         <div className="card relative overflow-hidden p-8 sm:p-14">
           <div className="relative max-w-2xl"><h2 className="text-3xl font-bold sm:text-4xl">Whether you need one employee or an entire workforce.</h2><p className="mt-4 text-lg text-slate-600">{COMPANY.commitment}</p>
-            <div className="mt-8 flex flex-wrap gap-3"><LinkButton href="/contact?topic=consultation" size="lg">Book a consultation</LinkButton><LinkButton href="/packages" variant="secondary" size="lg">Compare packages</LinkButton><LinkButton href="/register?as=organisation" variant="secondary" size="lg"><Building2 className="size-4" aria-hidden="true" />Register your HR firm</LinkButton></div></div></div>
+            <div className="mt-8 flex flex-wrap gap-3"><LinkButton href="/contact?topic=consultation" size="lg">Book a consultation</LinkButton><LinkButton href="/packages" variant="secondary" size="lg">Compare packages</LinkButton><LinkButton href="/login" variant="ghost" size="lg">Client login</LinkButton></div></div></div>
       </section>
     </>
   );

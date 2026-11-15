@@ -4,7 +4,7 @@ import { reviews, contracts, workerProfiles } from "@/db/schema";
 import { route, body, fail } from "@/lib/http";
 import { notify } from "@/lib/domain";
 
-export const POST = route({ roles: ["employer", "worker"] }, async (req, { session: s, db }) => {
+export const POST = route({ roles: ["employer", "admin", "worker"] }, async (req, { session: s, db }) => {
   const d = await body(req, z.object({ contractId: z.string().uuid(), rating: z.coerce.number().int().min(1, "Choose a rating").max(5), comment: z.string().trim().min(5, "Write a short comment").max(2000) }));
   const [c] = await db.select().from(contracts).where(eq(contracts.id, d.contractId)).limit(1);
   if (!c || (c.employerId !== s.userId && c.workerId !== s.userId)) throw fail(404, "Contract not found");

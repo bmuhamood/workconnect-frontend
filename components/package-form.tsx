@@ -19,13 +19,13 @@ export function PackageForm({ pkg }: { pkg?: Pkg }) {
     setBusy(true); setError("");
     try {
       const data = { name: f.name, tagline: f.tagline, priceText: f.priceText, billingNote: f.billingNote, features: f.features, highlighted: hi, sortOrder: Number(f.sortOrder || 0), ...(pkg ? { active } : {}) };
-      await call(pkg ? `/api/admin/packages/${pkg.id}` : "/api/admin/packages", pkg ? "PATCH" : "POST", data);
+      await call(pkg ? `/api/platform/packages/${pkg.id}` : "/api/platform/packages", pkg ? "PATCH" : "POST", data);
       toast(pkg ? "Package saved" : "Package added"); if (!pkg) { form.reset(); setHi(false); } router.refresh();
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }
   async function remove() {
     if (!pkg?.id || !window.confirm(`Delete the “${pkg.name}” package?`)) return;
-    try { await call(`/api/admin/packages/${pkg.id}`, "DELETE"); toast("Package deleted"); router.refresh(); } catch (e) { toast((e as Error).message, "error"); }
+    try { await call(`/api/platform/packages/${pkg.id}`, "DELETE"); toast("Package deleted"); router.refresh(); } catch (e) { toast((e as Error).message, "error"); }
   }
   return (
     <form onSubmit={submit} className="space-y-4">

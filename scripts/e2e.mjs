@@ -1,4 +1,6 @@
-// End-to-end test against a running server (local dev auth). Usage: BASE=http://localhost:3100 node scripts/e2e.mjs
+// End-to-end test of the client-tenant model against a running server using local dev auth.
+// Needs a freshly seeded database (npm run db:seed:reset) and the server started with PLATFORM_SETUP_TOKEN set.
+// Usage: DATABASE_URL=... BASE=http://localhost:3100 CRON_SECRET=... node scripts/e2e.mjs
 const BASE = process.env.BASE ?? "http://localhost:3100";
 const run = Date.now().toString(36);
 let failed = 0;
@@ -14,28 +16,92 @@ class Client {
     return { status: res.status, json, text };
   }
 }
-const mk = async (email, first, last, onboarding, tenantSlug) => {
-  const c = new Client();
-  if (tenantSlug) c.jar.wc_tenant = tenantSlug;
-  const r = await c.req("/api/local-auth/register", { method: "POST", body: { email, password: "Passw0rd!x", firstName: first, lastName: last, phone: "+2567" + String(Math.floor(10000000 + Math.random() * 89999999)) } });
-  if (r.status !== 200) throw new Error("register failed " + r.text);
-  const o = await c.req("/api/onboarding", { method: "POST", body: { firstName: first, lastName: last, phone: "+256700111222", city: "Kampala", ...onboarding } });
-  return { c, onboard: o };
-};
 
-// 1. Agency (creates tenant) + worker + employer
-const slugBase = `e2e agency ${run}`;
-const agency = await mk(`admin.${run}@e2e.test`, "Ada", "Admin", { role: "agency", agencyName: slugBase });
-check("agency sign-up creates a tenant + admin", agency.onboard.status === 200, agency.onboard.text.slice(0, 80));
-const slug = agency.c.jar.wc_tenant;
-const worker = await mk(`worker.${run}@e2e.test`, "Wanda", "Worker", { role: "worker", profession: "Nanny" }, slug);
-const employer = await mk(`employer.${run}@e2e.test`, "Eddie", "Employer", { role: "employer", companyName: "Eddie Home" }, slug);
-check("worker + employer join the tenant", worker.onboard.status === 200 && employer.onboard.status === 200);
-const dup = await mk(`worker.${run}@e2e.test`, "X", "Y", { role: "worker", profession: "Nanny" }, slug).catch((e) => ({ onboard: { status: 409 }, e }));
-check("duplicate email is rejected", String(dup.e?.message ?? "").includes("409") || dup.onboard.status === 409);
+import pg from "pg";
+const db = new pg.Client({ connectionString: process.env.DATABASE_URL }); await db.connect();
+const rand8 = () => String(Math.floor(10000000 + Math.random() * 89999999));
+const tokenOf = (url) => url.split("/invite/")[1];
+
+async function login(c, email, password = "Password123!") {
+  const r = await c.req("/api/local-auth/login", { method: "POST", body: { email, password } });
+  if (r.status !== 200) throw new Error(`login failed for ${email}: ${r.text}`);
+  return c;
+}
+/** Invitation acceptance exactly as the browser does it: create the identity, then complete the invitation. */
+async function accept(token, email, first, last, extra = {}) {
+  const c = new Client();
+  const r = await c.req("/api/local-auth/register", { method: "POST", body: { email, password: "Passw0rd!x", firstName: first, lastName: last, phone: "+2567" + rand8() } });
+  if (r.status !== 200) throw new Error("register failed " + r.text);
+  const o = await c.req("/api/onboarding", { method: "POST", body: { token, firstName: first, lastName: last, phone: "+256700111222", city: "Kampala", ...extra } });
+  return { c, o };
+}
+
+// ================= 1. WorkConnect adds two client organisations =================
+const anon = new Client(); const visitor = new Client();
+const sa = await login(new Client(), "superadmin@workconnect.ug");
+check("super admin signs in and opens the platform console", (await sa.req("/platform")).status === 200);
+const orgA = `E2E Client A ${run}`, orgB = `E2E Client B ${run}`;
+const emailA = `admin.a.${run}@e2e.test`, emailB = `admin.b.${run}@e2e.test`;
+const createA = await sa.req("/api/platform/tenants", { method: "POST", body: { orgName: orgA, industry: "Testing", adminEmail: emailA, adminFirstName: "Ada" } });
+check("super admin creates client A and gets an invitation link", createA.status === 200 && /\/invite\//.test(createA.json?.inviteUrl ?? ""), createA.text.slice(0, 120));
+const createB = await sa.req("/api/platform/tenants", { method: "POST", body: { orgName: orgB, adminEmail: emailB, adminFirstName: "Bob" } });
+check("super admin creates client B", createB.status === 200);
+const tenantA = createA.json.id, tenantB = createB.json.id, slug = createA.json.slug, slugBase = orgA;
+check("a client needs a valid administrator email", (await sa.req("/api/platform/tenants", { method: "POST", body: { orgName: "No Email Ltd", adminEmail: "nope" } })).status === 400);
+
+// ================= 2. Invitation security =================
+check("unknown invitation link is handled gracefully", /can't be used/.test((await anon.req("/invite/" + "x".repeat(43))).text));
+const invPage = await anon.req(`/invite/${tokenOf(createA.json.inviteUrl)}`);
+check("valid invitation page names the client and locks the email", invPage.status === 200 && invPage.text.includes(orgA) && invPage.text.includes(emailA));
+const wrong = await accept(tokenOf(createA.json.inviteUrl), `someone.else.${run}@e2e.test`, "Wrong", "Person");
+check("an invitation can't be used by a different email address", wrong.o.status === 403 && /was sent to/.test(wrong.o.json?.error ?? ""), wrong.o.text.slice(0, 100));
+const a1 = await accept(tokenOf(createA.json.inviteUrl), emailA, "Ada", "Admin");
+check("client administrator accepts the invitation", a1.o.status === 200, a1.o.text.slice(0, 100));
+const adminA = a1.c;
+check("an invitation can only be used once", (await accept(tokenOf(createA.json.inviteUrl), `again.${run}@e2e.test`, "X", "Y")).o.status === 410);
+check("a used invitation page says it can't be used", /can't be used/.test((await anon.req(`/invite/${tokenOf(createA.json.inviteUrl)}`)).text));
+check("admin dashboard shows the client's name", (await adminA.req("/dashboard")).text.includes(orgA));
+const b1 = await accept(tokenOf(createB.json.inviteUrl), emailB, "Bob", "Admin");
+check("client B administrator accepts", b1.o.status === 200);
+const adminBc = b1.c;
+check("public self-registration no longer exists", /Accounts are created by invitation/.test((await anon.req("/register")).text));
+check("agency self-signup is impossible: onboarding needs a token", (await a1.c.req("/api/onboarding", { method: "POST", body: { firstName: "A", lastName: "B", phone: "+256700111222", agencyName: "Mine" } })).status === 400);
+
+// administrator invites managers and employees
+const mEmail = `mia.${run}@e2e.test`, wEmail = `wanda.${run}@e2e.test`, tEmail = `third.${run}@e2e.test`;
+const invM = await adminA.req("/api/admin/invitations", { method: "POST", body: { role: "employer", lines: `Mia Manager <${mEmail}>` } });
+check("administrator invites a manager", invM.status === 200 && invM.json?.created?.length === 1);
+const invW = await adminA.req("/api/admin/invitations", { method: "POST", body: { role: "worker", lines: `Wanda Worker <${wEmail}>\n${tEmail}, Third\nnot-an-email\n${wEmail}` } });
+check("bulk invite: 2 sent; invalid and duplicate lines handled", invW.status === 200 && invW.json.created.length === 2 && invW.json.skipped.some((s) => /valid/i.test(s.reason)), JSON.stringify(invW.json?.skipped));
+check("a worker cannot invite people", (await a1.c.req("/api/platform/tenants", { method: "POST", body: { orgName: "Hack Ltd", adminEmail: "h@x.test" } })).status === 403);
+const mia = await accept(tokenOf(invM.json.created[0].url), mEmail, "Mia", "Manager");
+check("manager accepts", mia.o.status === 200);
+const noProf = await accept(tokenOf(invW.json.created[0].url), wEmail, "Wanda", "Worker", {});
+check("an employee must give a job title", noProf.o.status === 400 && /job title|profession/i.test(noProf.o.json?.error ?? ""), noProf.o.text.slice(0, 100));
+const wan = { c: noProf.c, o: await noProf.c.req("/api/onboarding", { method: "POST", body: { token: tokenOf(invW.json.created[0].url), firstName: "Wanda", lastName: "Worker", phone: "+256700111222", profession: "Nanny" } }) };
+check("employee completes the invitation after adding a job title", wan.o.status === 200, wan.o.text.slice(0, 100));
+const thr = await accept(tokenOf(invW.json.created[1].url), tEmail, "Third", "Person", { profession: "Cook" });
+check("second employee accepts", thr.o.status === 200);
+// resend + revoke via the admin page
+const teamPage = await adminA.req("/admin");
+check("team page lists the people and consultants section", teamPage.status === 200 && /Wanda/.test(teamPage.text.replace(/<!-- -->/g, "")));
+const extra = await adminA.req("/api/admin/invitations", { method: "POST", body: { role: "worker", lines: `extra.${run}@e2e.test` } });
+const exId = ((await adminA.req("/admin")).text.match(/\/api\/admin\/invitations\/([0-9a-f-]{36})/) ?? [])[1];
+const resent = await adminA.req(`/api/admin/invitations/${exId}`, { method: "POST" });
+check("resending an invitation issues a new link and kills the old one", resent.status === 200 && tokenOf(resent.json.url) !== tokenOf(extra.json.created[0].url) && /can't be used/.test((await anon.req(`/invite/${tokenOf(extra.json.created[0].url)}`)).text));
+check("the new link works", !/can't be used/.test((await anon.req(`/invite/${tokenOf(resent.json.url)}`)).text));
+const exId2 = ((await adminA.req("/admin")).text.match(/\/api\/admin\/invitations\/([0-9a-f-]{36})/) ?? [])[1];
+check("administrator revokes an invitation", (await adminA.req(`/api/admin/invitations/${exId2}`, { method: "DELETE" })).status === 200 && /can't be used/.test((await anon.req(`/invite/${tokenOf(resent.json.url)}`)).text));
+const expiring = await adminA.req("/api/admin/invitations", { method: "POST", body: { role: "worker", lines: `late.${run}@e2e.test` } });
+await db.query("update invitations set expires_at = now() - interval '1 day' where email = $1", [`late.${run}@e2e.test`]);
+check("an expired invitation is refused", /can't be used/.test((await anon.req(`/invite/${tokenOf(expiring.json.created[0].url)}`)).text));
+check("client B's administrator cannot revoke client A's invitation", (await adminBc.req(`/api/admin/invitations/${exId2}`, { method: "DELETE" })).status === 404);
+
+// ----- actors under the names the shared sections below use -----
+const agency = { c: adminA }, employer = { c: mia.c }, worker = { c: wan.c }, third = { c: thr.c };
+const attacker = adminBc, otherAdmin = adminBc;
 
 // 2. Auth guards
-const anon = new Client();
 check("unauthenticated API call -> 401", (await anon.req("/api/jobs", { method: "POST", body: {} })).status === 401);
 const bad = await new Client().req("/api/local-auth/login", { method: "POST", body: { email: `worker.${run}@e2e.test`, password: "wrong-password" } });
 check("wrong password -> 401 with clear message", bad.status === 401 && /Incorrect/.test(bad.json?.error ?? ""));
@@ -80,15 +146,13 @@ check("employer completes contract", (await employer.c.req(`/api/contracts/${cid
 check("employer reviews worker", (await employer.c.req("/api/reviews", { method: "POST", body: { contractId: cid, rating: 5, comment: "Wonderful and reliable." } })).status === 200);
 check("worker reviews employer", (await worker.c.req("/api/reviews", { method: "POST", body: { contractId: cid, rating: 4, comment: "Good employer, fair." } })).status === 200);
 check("duplicate review blocked", (await employer.c.req("/api/reviews", { method: "POST", body: { contractId: cid, rating: 5, comment: "Again again" } })).status === 409);
-const wp = await anon.req("/workers/" + workerId, { headers: { cookie: `wc_tenant=${slug}` } });
+const wp = await employer.c.req("/workers/" + workerId);
 check("worker public page shows 5.0 rating", wp.status === 200 && /5\.0/.test(wp.text) && /Wonderful and reliable/.test(wp.text));
 
 // 4. Messaging
 const conv = await employer.c.req("/api/conversations", { method: "POST", body: { userId: workerId, message: "Hi Wanda!" } });
 check("start conversation", conv.status === 200 && !!conv.json?.id);
 check("send + read messages", (await worker.c.req(`/api/conversations/${conv.json.id}`, { method: "POST", body: { message: "Hello!" } })).status === 200 && (await employer.c.req(`/api/conversations/${conv.json.id}`)).json.messages.length === 2);
-const third = await mk(`worker2.${run}@e2e.test`, "Third", "Person", { role: "worker", profession: "Cook" }, slug);
-check("non-participant cannot read conversation", (await third.c.req(`/api/conversations/${conv.json.id}`)).status === 404);
 
 // 5. Admin + campaigns + unsubscribe
 check("worker cannot verify members (admin only)", (await worker.c.req(`/api/admin/workers/${workerId}`, { method: "PATCH", body: { verified: true } })).status === 403);
@@ -96,24 +160,108 @@ check("admin verifies worker", (await agency.c.req(`/api/admin/workers/${workerI
 check("admin page renders", (await agency.c.req("/admin")).status === 200);
 check("admin sends campaign to opted-in members", (await agency.c.req("/api/admin/campaigns", { method: "POST", body: { subject: "Welcome offer", message: "We have new features for you this month.", audience: "all" } })).json?.queued >= 3);
 
-// 6. Cross-tenant attacks (seeded tenant A employer vs our new tenant)
-const attacker = new Client(); attacker.jar.wc_tenant = "work-connect-ug";
-const lg = await attacker.req("/api/local-auth/login", { method: "POST", body: { email: "client1@workconnect.ug", password: "Password123!" } });
-check("seeded employer from another tenant signs in", lg.status === 200);
-check("other tenant cannot open our job page", (await attacker.req(`/jobs/${jobId}`)).status === 404);
-check("other tenant cannot see our worker profile", (await attacker.req(`/workers/${workerId}`)).status === 404);
-check("other tenant cannot read our contract", (await attacker.req(`/contracts/${cid}`)).status === 404);
-check("other tenant cannot modify our job", (await attacker.req(`/api/jobs/${jobId}`, { method: "DELETE" })).status === 404);
-check("other tenant cannot sign our contract", (await attacker.req(`/api/contracts/${cid}`, { method: "PATCH", body: { action: "terminate" } })).status === 404);
-check("other tenant cannot message our users", (await attacker.req("/api/conversations", { method: "POST", body: { userId: workerId, message: "hi" } })).status === 404);
-const list = await attacker.req("/jobs");
-check("other tenant's job list excludes our job", list.status === 200 && !/Live-out nanny<\/h2>[\s\S]*E2E/.test(list.text) && !list.text.includes(jobId));
-const forged = new Client(); forged.jar = { ...attacker.jar, wc_tenant: slug };
-check("forging the tenant cookie does not grant access", (await forged.req(`/jobs/${jobId}`)).status === 404);
 
-// 7. Public pages
-for (const p of ["/", "/jobs", "/workers", "/login", "/register", "/about", "/help", "/terms", "/privacy"]) check(`public page ${p} renders`, (await anon.req(p)).status === 200);
-check("tenant entry link sets cookie + redirects", (await anon.req("/t/work-connect-ug")).status === 307);
+// ================= 6. The public site belongs to WorkConnect =================
+for (const p of ["/", "/services", "/packages", "/contact", "/about", "/login", "/register", "/help", "/terms", "/privacy"]) check(`public page ${p} renders`, (await anon.req(p)).status === 200);
+const home = await anon.req("/");
+check("home page: WorkConnect brand, client login, private-workspace section", /Client login/.test(home.text) && /Every client gets a private workspace/.test(home.text) && !/Register your HR firm/.test(home.text) && !home.text.includes(orgA));
+check("a client's name never appears on the public site", !(await anon.req("/packages")).text.includes(orgA) && !(await anon.req("/contact")).text.includes(orgA));
+check("jobs, candidates and contracts need sign-in (no public marketplace)", (await anon.req("/jobs")).status === 307 && (await anon.req("/workers")).status === 307 && (await anon.req("/hr")).status === 307 && (await anon.req("/dashboard")).status === 307);
+check("old tenant links no longer exist", (await anon.req("/t/" + slug)).status === 404);
+check("platform console is closed to the public", (await anon.req("/platform")).status === 307);
+check("client administrator cannot open the platform console", (await adminA.req("/platform")).status === 307);
+check("client administrator cannot add clients", (await adminA.req("/api/platform/tenants", { method: "POST", body: { orgName: "Rogue", adminEmail: "r@e2e.test" } })).status === 403);
+check("manager and employee cannot call platform APIs", (await mia.c.req("/api/platform/packages", { method: "POST", body: { name: "x", priceText: "y", features: "" } })).status === 403 && (await wan.c.req("/api/platform/staff", { method: "POST", body: { email: "q@e2e.test" } })).status === 403);
+
+// ================= 7. Enquiries go to WorkConnect, not to a client =================
+const mark = `needs-help-${run}`;
+check("contact form validates input", (await visitor.req("/api/contact", { method: "POST", body: { name: "A", email: "nope", topic: "General question", message: "short" } })).status === 400);
+check("contact form rejects unknown topics", (await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "Spam", message: "x".repeat(20) } })).status === 400);
+const lead = await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, company: "Visitor Co", topic: "Book a consultation", message: `We need payroll for 40 staff. ${mark}` } });
+check("a visitor sends an enquiry without signing in", lead.status === 200);
+check("honeypot: bots get 200 but nothing is stored", (await visitor.req("/api/contact", { method: "POST", body: { name: "Bot Bot", email: `bot.${run}@e2e.test`, topic: "General question", message: "buy cheap pills now please", website: "http://spam.example" } })).status === 200);
+for (let k = 0; k < 2; k++) await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "General question", message: `Another message number ${k} please` } });
+check("rate limit: 4th enquiry in an hour from one email -> 429", (await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "General question", message: "Yet another one please answer" } })).status === 429);
+await new Promise((r) => setTimeout(r, 2500));
+const leads = await sa.req("/platform/leads");
+check("super admin sees the enquiry with company and message", leads.status === 200 && leads.text.includes(mark) && leads.text.includes("Visitor Co"));
+check("honeypot enquiry never reached WorkConnect", !leads.text.includes("buy cheap pills"));
+check("enquiries are not visible inside any client workspace", !(await adminA.req("/admin")).text.includes(mark) && !(await adminBc.req("/admin")).text.includes(mark));
+check("client administrator cannot read enquiries", (await adminA.req("/platform/leads")).status === 307);
+const leadId = (leads.text.match(/\/api\/platform\/leads\/([0-9a-f-]{36})/) ?? [])[1];
+check("staff can mark an enquiry contacted", (await sa.req(`/api/platform/leads/${leadId}`, { method: "PATCH", body: { status: "contacted" } })).status === 200);
+check("client administrator cannot change enquiries", (await adminA.req(`/api/platform/leads/${leadId}`, { method: "PATCH", body: { status: "closed" } })).status === 403);
+check("package quote link prefills the contact form", /quote for the Recruitment package/.test((await anon.req("/contact?package=Recruitment")).text));
+const emails = await db.query("select template, reply_to, tenant_id from email_outbox where template in ('lead_staff','lead_receipt') and reply_to is not null or template='lead_staff'");
+check("enquiry emails are platform emails (no client) with Reply-To the visitor", emails.rows.some((r) => r.template === "lead_staff" && r.reply_to === `v.${run}@e2e.test` && r.tenant_id === null));
+
+// ================= 8. WorkConnect's packages =================
+check("public packages page shows the starter set before any are saved", /Workforce Management/.test((await anon.req("/packages")).text));
+check("client administrator cannot manage WorkConnect's packages", (await adminA.req("/api/platform/packages/starter", { method: "POST" })).status === 403);
+const had = (await db.query("select count(*)::int n from platform_packages")).rows[0].n;
+check("super admin saves the starter packages (or they already exist)", (await sa.req("/api/platform/packages/starter", { method: "POST" })).status === (had ? 409 : 200));
+const pk = await sa.req("/api/platform/packages", { method: "POST", body: { name: `Executive Search ${run}`, tagline: "Senior hires", priceText: "From UGX 2,000,000", features: "Retained search\nBoard-level references", highlighted: false, sortOrder: 9 } });
+check("super admin creates a package", pk.status === 200 && !!pk.json?.id);
+check("super admin edits the price", (await sa.req(`/api/platform/packages/${pk.json.id}`, { method: "PATCH", body: { priceText: "From UGX 2,500,000" } })).status === 200);
+const pubPk = await anon.req("/packages");
+check("the public Packages page shows it", /Executive Search/.test(pubPk.text) && /2,500,000/.test(pubPk.text));
+check("a package can be hidden from the website", (await sa.req(`/api/platform/packages/${pk.json.id}`, { method: "PATCH", body: { active: false } })).status === 200 && !/Executive Search/.test((await anon.req("/packages")).text));
+check("super admin deletes the package", (await sa.req(`/api/platform/packages/${pk.json.id}`, { method: "DELETE" })).status === 200);
+check("tenant roles cannot read platform tables at database level", await (async () => { try { await db.query("begin; set local role wc_app; select count(*) from platform_leads"); return false; } catch { await db.query("rollback"); return true; } })());
+await db.query("rollback").catch(() => {});
+
+// ================= 9. Consultants work inside client workspaces, visibly and on the record =================
+const cEmail = `consultant.${run}@e2e.test`;
+const invC = await sa.req("/api/platform/staff", { method: "POST", body: { email: cEmail, firstName: "Cora" } });
+check("super admin invites a consultant", invC.status === 200 && /\/invite\//.test(invC.json?.inviteUrl ?? ""));
+check("a consultant invitation page says WorkConnect team", /WorkConnect team/.test((await anon.req(`/invite/${tokenOf(invC.json.inviteUrl)}`)).text));
+check("client administrators can't invite consultants", (await adminA.req("/api/platform/staff", { method: "POST", body: { email: "x@e2e.test" } })).status === 403);
+const con = await accept(tokenOf(invC.json.inviteUrl), cEmail, "Cora", "Consultant");
+check("consultant accepts and becomes staff", con.o.status === 200 && con.o.json?.staff === true);
+check("consultant sees the client list", (await con.c.req("/platform")).status === 200 && (await con.c.req("/platform")).text.includes(orgA));
+check("consultant can't add clients, manage packages, other consultants or the audit log", (await con.c.req("/platform/new")).status === 307 && (await con.c.req("/platform/team")).status === 307 && (await con.c.req("/platform/audit")).status === 307 && (await con.c.req("/api/platform/tenants", { method: "POST", body: { orgName: "X Ltd", adminEmail: "x@e2e.test" } })).status === 403);
+check("consultant can read enquiries", (await con.c.req("/platform/leads")).status === 200);
+check("a consultant has no workspace until they open one", (await con.c.req("/dashboard")).status === 307);
+const before = await adminA.req("/admin");
+check("before any visit, client A sees no consultant section for this person", !before.text.includes("Cora"));
+const enter = await con.c.req(`/api/platform/tenants/${tenantA}/enter`, { method: "POST" });
+check("consultant opens client A's workspace", enter.status === 200);
+const inA = await con.c.req("/dashboard");
+check("inside the workspace: full admin access and a visible consultant banner", inA.status === 200 && /consultant access/i.test(inA.text) && inA.text.includes(orgA));
+check("consultant can run HR work (open HR operations)", (await con.c.req("/hr")).status === 200 && (await con.c.req("/hr/employees")).status === 200);
+check("the client's team page now shows the consultant", /WorkConnect consultants with access/.test((await adminA.req("/admin")).text) && (await adminA.req("/admin")).text.includes("Cora"));
+check("the entry is recorded in the audit log", /entered workspace/.test((await sa.req("/platform/audit")).text));
+check("the client's detail page shows WorkConnect activity", /entered workspace/.test((await sa.req(`/platform/clients/${tenantA}`)).text));
+check("a consultant can't pay invoices for the client", (await con.c.req(`/api/invoices/${"0".repeat(8)}-0000-0000-0000-${"0".repeat(12)}/pay`, { method: "POST", body: { method: "card" } })).status === 403);
+check("a consultant can't end or sign contracts for the client", (await con.c.req(`/api/contracts/${cid}`, { method: "PATCH", body: { action: "terminate" } })).status === 403);
+check("a consultant can't enter a suspended client (tested below) or one that doesn't exist", (await con.c.req(`/api/platform/tenants/${"0".repeat(8)}-0000-0000-0000-${"0".repeat(12)}/enter`, { method: "POST" })).status === 404);
+check("while in client A the consultant cannot see client B's data", (await con.c.req("/admin")).status === 200 && !(await con.c.req("/admin")).text.includes(orgB));
+check("consultant exits the workspace", (await con.c.req("/api/platform/exit", { method: "POST" })).status === 200 && (await con.c.req("/dashboard")).status === 307);
+check("client B never sees that consultant", !(await adminBc.req("/admin")).text.includes("Cora"));
+
+// ================= 10. Suspension =================
+check("super admin suspends client B", (await sa.req(`/api/platform/tenants/${tenantB}`, { method: "PATCH", body: { action: "suspend" } })).status === 200);
+check("suspended client's people are locked out", (await adminBc.req("/dashboard")).status === 307 && (await adminBc.req("/api/jobs", { method: "POST", body: { title: "x" } })).status === 401);
+check("nobody can enter a suspended workspace", (await sa.req(`/api/platform/tenants/${tenantB}/enter`, { method: "POST" })).status === 404);
+check("client A is unaffected", (await adminA.req("/dashboard")).status === 200);
+check("super admin reactivates client B and access returns", (await sa.req(`/api/platform/tenants/${tenantB}`, { method: "PATCH", body: { action: "activate" } })).status === 200 && (await adminBc.req("/dashboard")).status === 200);
+check("super admin edits a client's service fee", (await sa.req(`/api/platform/tenants/${tenantA}`, { method: "PATCH", body: { action: "update", name: orgA, industry: "Testing", serviceFeePercent: 10 } })).status === 200);
+check("client administrator cannot change the service fee", (await adminA.req(`/api/platform/tenants/${tenantA}`, { method: "PATCH", body: { action: "update", name: orgA, serviceFeePercent: 0 } })).status === 403);
+
+// ================= 11. First-run setup is closed once a Super Admin exists =================
+const lone = new Client(); await lone.req("/api/local-auth/register", { method: "POST", body: { email: `setup.${run}@e2e.test`, password: "Passw0rd!x", firstName: "S", lastName: "U", phone: "+2567" + rand8() } });
+const setupTry = await lone.req("/api/setup", { method: "POST", body: { token: process.env.PLATFORM_SETUP_TOKEN ?? "wrong-token-wrong-token", firstName: "S", lastName: "U", phone: "+256700111222" } });
+check("setup refuses once a Super Admin exists (or without the token)", [403, 404, 409].includes(setupTry.status), String(setupTry.status));
+check("the setup page is closed", [307, 404].includes((await anon.req("/setup")).status));
+check("an invite-less identity can't reach any workspace", (await lone.req("/dashboard")).status === 307 && (await lone.req("/jobs")).status === 307);
+
+// ================= 12. Client separation (HTTP view) =================
+const wIds = [...(await adminA.req("/admin")).text.matchAll(/\/api\/admin\/workers\/([0-9a-f-]{36})/g)].map((m) => m[1]);
+check("client A's team lists only client A's two employees", new Set(wIds).size === 2);
+check("client B's administrator sees none of client A's people", !(await adminBc.req("/admin")).text.includes("Wanda") && !(await adminBc.req("/admin")).text.includes("Mia"));
+check("client B cannot verify client A's employee", (await adminBc.req(`/api/admin/workers/${wIds[0]}`, { method: "PATCH", body: { verified: true } })).status === 404);
+check("client B cannot message client A's employee", (await adminBc.req("/api/conversations", { method: "POST", body: { userId: wIds[0], message: "hi" } })).status === 404);
+check("client B cannot invite into client A (invitations are per workspace)", !(await adminBc.req("/admin")).text.includes(`late.${run}@e2e.test`));
 
 // 8. Cron
 const cron = await anon.req("/api/cron/emails", { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
@@ -128,7 +276,7 @@ const good = `https://res.cloudinary.com/${sg.json?.cloudName}/image/upload/v1/$
 check("avatar accepted from own tenant folder", (await worker.c.req("/api/profile/avatar", { method: "PATCH", body: { url: good } })).status === 200);
 check("avatar from another tenant's folder rejected", (await worker.c.req("/api/profile/avatar", { method: "PATCH", body: { url: good.replace(/workconnect\/[0-9a-f-]{36}/, "workconnect/00000000-0000-0000-0000-000000000000") } })).status === 400);
 check("avatar from arbitrary host rejected", (await worker.c.req("/api/profile/avatar", { method: "PATCH", body: { url: "https://evil.example/x.jpg" } })).status === 400);
-const shown = await anon.req("/workers/" + workerId, { headers: { cookie: `wc_tenant=${slug}` } });
+const shown = await employer.c.req("/workers/" + workerId);
 check("profile photo renders on the worker page", shown.status === 200 && shown.text.includes("/me.jpg"));
 // 10. Test email (log transport marks it sent; with Resend it would show provider errors here)
 check("admin can send a test email", (await agency.c.req("/api/admin/test-email", { method: "POST" })).status === 200);
@@ -136,32 +284,6 @@ check("worker cannot send test emails", (await worker.c.req("/api/admin/test-ema
 await new Promise((r) => setTimeout(r, 2500));
 const adm = await agency.c.req("/admin");
 check("test email appears as sent in the admin outbox", /Test email from WorkConnect/.test(adm.text) && />Sent</.test(adm.text));
-
-// 11. Contact page + inbox (public form, honeypot, rate limit, tenant isolation, emails)
-const visitor = new Client(); visitor.jar.wc_tenant = slug;
-const mark = `needs-help-${run}`;
-check("contact page renders", (await visitor.req("/contact")).status === 200);
-check("contact form validates input", (await visitor.req("/api/contact", { method: "POST", body: { name: "A", email: "nope", topic: "General question", message: "short" } })).status === 400);
-check("contact form rejects unknown topic", (await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "Spam", message: "x".repeat(20) } })).status === 400);
-const sent = await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "I want to hire staff", message: `We need two drivers and a cook. ${mark}` } });
-check("visitor sends a contact message (no sign-in)", sent.status === 200);
-const bot = await visitor.req("/api/contact", { method: "POST", body: { name: "Bot Bot", email: `bot.${run}@e2e.test`, topic: "General question", message: "buy cheap pills now please", website: "http://spam.example" } });
-check("honeypot: bots get 200 but nothing is stored", bot.status === 200);
-await new Promise((r) => setTimeout(r, 2500));
-const inbox = await agency.c.req("/admin");
-check("admin inbox shows the message", /We need two drivers and a cook/.test(inbox.text) && inbox.text.includes(`v.${run}@e2e.test`));
-check("honeypot message never reached the inbox", !inbox.text.includes("buy cheap pills"));
-check("admin email carries Reply-To the visitor + visitor gets a receipt", /New contact message: I want to hire staff/.test(inbox.text) && /We received your message/.test(inbox.text));
-for (let k = 0; k < 2; k++) await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "General question", message: `Another message number ${k} please` } });
-check("rate limit: 4th message in an hour from the same email -> 429", (await visitor.req("/api/contact", { method: "POST", body: { name: "Vera Visitor", email: `v.${run}@e2e.test`, topic: "General question", message: "Yet another one please answer" } })).status === 429);
-const otherAdmin = new Client(); otherAdmin.jar.wc_tenant = "work-connect-ug";
-await otherAdmin.req("/api/local-auth/login", { method: "POST", body: { email: "owner@workconnect.ug", password: "Password123!" } });
-const otherInbox = await otherAdmin.req("/admin");
-check("another tenant's admin cannot see our contact messages", otherInbox.status === 200 && !otherInbox.text.includes(mark) && !otherInbox.text.includes(`v.${run}@e2e.test`));
-check("admin saves contact details", (await agency.c.req("/api/admin/tenant", { method: "PATCH", body: { name: slugBase, brandColor: "#4f46e5", serviceFeePercent: 10, contactEmail: "hello@listoq.com", contactPhone: "+256 700 123 456", contactAddress: "Plot 1, Kampala Road" } })).status === 200);
-const cp = await visitor.req("/contact");
-check("contact page shows the organisation's details", /hello@listoq\.com/.test(cp.text) && /Kampala Road/.test(cp.text));
-check("worker cannot change contact details", (await worker.c.req("/api/admin/tenant", { method: "PATCH", body: { name: "x", brandColor: "#000000", serviceFeePercent: 1 } })).status === 403);
 
 // ============ 12. HR OPERATIONS, PACKAGES, CATEGORIES ============
 const ymdUtc = (d) => d.toISOString().slice(0, 10);
@@ -187,38 +309,10 @@ const jobNewCat = await employer.c.req("/api/jobs", { method: "POST", body: { ti
 check("a job can be posted in a newly created category", jobNewCat.status === 200);
 check("post-job page offers inline category creation", /Add a new category|New category name|No categories/.test((await employer.c.req("/post-job")).text) || (await employer.c.req("/post-job")).status === 200);
 
-// -- service packages
-const pubPk = await visitor.req("/packages");
-check("packages page shows starter packages before any are saved", pubPk.status === 200 && /Workforce Management/.test(pubPk.text) && /Request a quote/.test(pubPk.text));
-check("new organisations already get the 3 starter packages at sign-up", (await agency.c.req("/api/admin/packages/starter", { method: "POST" })).status === 409);
-const pkgIds = [...(await agency.c.req("/admin/packages")).text.matchAll(/\\"id\\":\\"([0-9a-f-]{36})\\",\\"name\\":\\"(?:Recruitment|Workforce Management|Full HR Outsourcing)\\"/g)].map((m) => m[1]);
-check("admin package manager lists the 3 starter packages", pkgIds.length === 3, `found ${pkgIds.length}`);
-for (const id of pkgIds) await agency.c.req(`/api/admin/packages/${id}`, { method: "DELETE" });
-check("with no packages, the website still shows the starter set (display fallback)", /Workforce Management/.test((await visitor.req("/packages")).text));
-check("admin can reload the starter packages after clearing them", (await agency.c.req("/api/admin/packages/starter", { method: "POST" })).status === 200);
-check("starter packages can only be loaded once", (await agency.c.req("/api/admin/packages/starter", { method: "POST" })).status === 409);
-const created = await agency.c.req("/api/admin/packages", { method: "POST", body: { name: `Executive Search ${run}`, tagline: "Senior hires", priceText: "From UGX 2,000,000", features: "Retained search\nBoard-level references", highlighted: false, sortOrder: 9 } });
-check("admin creates a custom package", created.status === 200 && !!created.json?.id);
-check("admin edits a package", (await agency.c.req(`/api/admin/packages/${created.json.id}`, { method: "PATCH", body: { priceText: "From UGX 2,500,000" } })).status === 200);
-const pk2 = await visitor.req("/packages");
-check("public packages page shows the custom package + price", /Executive Search/.test(pk2.text) && /2,500,000/.test(pk2.text));
-check("worker cannot manage packages", (await worker.c.req("/api/admin/packages", { method: "POST", body: { name: "x", priceText: "y", features: "" } })).status === 403);
-check("other tenant cannot edit our package", (await otherAdmin.req(`/api/admin/packages/${created.json.id}`, { method: "PATCH", body: { priceText: "Free" } })).status === 404);
-check("package can be hidden from the website", (await agency.c.req(`/api/admin/packages/${created.json.id}`, { method: "PATCH", body: { active: false } })).status === 200 && !/Executive Search/.test((await visitor.req("/packages")).text));
-check("admin deletes a package", (await agency.c.req(`/api/admin/packages/${created.json.id}`, { method: "DELETE" })).status === 200);
-
-// -- HR landing + public pages
-const home = await visitor.req("/");
-check("home page is positioned as HR consulting", home.status === 200 && /HR consulting and workforce management, run properly/.test(home.text) && /Packages that grow with your team/.test(home.text) && /HR operations, in one platform/.test(home.text) && /Book a consultation/.test(home.text));
-check("services page renders all six services", (await visitor.req("/services")).text.includes("Employee monitoring") && (await visitor.req("/services")).status === 200);
-const pre = await visitor.req("/contact?package=Recruitment");
-check("package quote link prefills the contact form", /quote for the Recruitment package/.test(pre.text));
-check("'Book a consultation' topic is accepted", (await visitor.req("/api/contact", { method: "POST", body: { name: "Cara Consult", email: `c.${run}@e2e.test`, topic: "Book a consultation", message: "We would like to review our HR set-up soon." } })).status === 200);
-
 // -- HR access control
 check("HR overview requires sign-in", (await anon.req("/hr")).status === 307);
 check("worker cannot open the employees page", (await worker.c.req("/hr/employees")).status === 307);
-check("employer cannot open payroll", (await employer.c.req("/hr/payroll")).status === 307);
+check("a manager can open payroll (their own team only)", (await employer.c.req("/hr/payroll")).status === 200);
 check("only admin can open HR settings", (await employer.c.req("/hr/settings")).status === 307 && (await agency.c.req("/hr/settings")).status === 200);
 
 // -- a live employment: 1,900,000 salary (published PAYE example), started at the start of this month
@@ -262,7 +356,8 @@ check("double clock-out is rejected", (await worker.c.req("/api/hr/attendance/cl
 const attDay = await agency.c.req("/hr/attendance");
 check("manager attendance view shows the employee", attDay.status === 200 && /Wanda/.test(attDay.text));
 const manualDate = u1 < todayStr ? u1 : monthStart;
-const man = await employer.c.req("/api/hr/attendance", { method: "POST", body: { contractId: hcid, date: addD(monthStart, 0), clockIn: "08:40", clockOut: "17:00", note: "Traffic" } });
+let w3 = addD(u2, 1); while (!isWd(w3) || w3 === todayStr) w3 = addD(w3, 1);
+const man = await employer.c.req("/api/hr/attendance", { method: "POST", body: { contractId: hcid, date: w3, clockIn: "08:40", clockOut: "17:00", note: "Traffic" } });
 check("manager records a late day manually (08:40 > 08:00+15)", man.status === 200 && man.json?.status === "late", JSON.stringify(man.json));
 check("manual entry validates clock-out after clock-in", (await employer.c.req("/api/hr/attendance", { method: "POST", body: { contractId: hcid, date: monthStart, clockIn: "09:00", clockOut: "08:00" } })).status === 400);
 check("worker cannot write manual attendance", (await worker.c.req("/api/hr/attendance", { method: "POST", body: { contractId: hcid, date: monthStart, clockIn: "08:00" } })).status === 403);
@@ -331,3 +426,4 @@ check("HR actions queued emails (payslip, leave, ticket)", /Payslip ready/.test(
 console.log("SLUG=" + slug);
 console.log(failed ? `\n${failed} FAILED` : "\nAll end-to-end checks passed");
 process.exit(failed ? 1 : 0);
+

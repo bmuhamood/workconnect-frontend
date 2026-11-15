@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
 import { ShieldCheck, MapPin, Briefcase, Languages } from "lucide-react";
 import { tdb } from "@/lib/tenant";
-import { getSession } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 import { workerProfiles, users, reviews, jobs } from "@/db/schema";
 import { Avatar, Badge, Stars, LinkButton } from "@/components/ui";
 import { AjaxForm, Field } from "@/components/ajax-form";
@@ -15,7 +15,7 @@ export default async function WorkerPage({ params, searchParams }: { params: Pro
   const { id } = await params;
   const sp = await searchParams;
   if (!isId(id)) notFound();
-  const s = await getSession();
+  const s = await requireSession(["admin", "employer"]);
   const d = await tdb(async (tx) => {
     const [w] = await tx.select({ first: users.firstName, last: users.lastName, avatar: users.avatarUrl, p: workerProfiles }).from(workerProfiles).innerJoin(users, eq(users.id, workerProfiles.userId)).where(eq(workerProfiles.userId, id)).limit(1);
     if (!w) return null;

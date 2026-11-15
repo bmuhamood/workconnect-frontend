@@ -1,34 +1,32 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { rootDb, withTenant } from "@/lib/db";
-import { users, tenants, memberships, categories, servicePackages } from "@/db/schema";
+import { tenants, categories } from "@/db/schema";
 import { platformRoute, body, fail } from "@/lib/http";
-import { LOCAL_PASSWORDS } from "@/lib/auth-mode";
-import { hashPassword } from "@/lib/identity";
-import { DEFAULT_CATEGORIES, DEFAULT_PACKAGES } from "@/lib/domain-constants";
+import { DEFAULT_CATEGORIES } from "@/lib/domain-constants";
+import { issueMemberInvite } from "@/lib/invite-actions";
+import { audit } from "@/lib/audit";
+import { emailRe } from "@/lib/invitations";
 
-const phone = z.string().trim().transform((s) => s.replace(/[\s-]/g, "")).refine((s) => /^\+?[0-9]{9,15}$/.test(s), "Enter a valid phone number");
 const schema = z.object({
-  orgName: z.string().trim().min(2, "Enter the organisation name").max(120),
-  firstName: z.string().trim().min(1, "Owner first name is required").max(80), lastName: z.string().trim().min(1, "Owner last name is required").max(80),
-  email: z.string().trim().toLowerCase().email("Enter a valid owner email"), phone,
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  orgName: z.string().trim().min(2, "Enter the client's organisation name").max(120),
+  industry: z.string().trim().max(80).optional(),
+  adminEmail: z.string().trim().toLowerCase().refine((s) => emailRe.test(s), "Enter the administrator's email"),
+  adminFirstName: z.string().trim().max(80).optional(),
 });
-const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "org";
+const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "client";
 
-/** Super admin onboards a new HR consultancy together with its owner account. */
-export const POST = platformRoute(async (req) => {
-  if (!LOCAL_PASSWORDS) throw fail(409, "This deployment signs people in with Neon Auth, which can't be pre-provisioned from here. Ask the owner to use “Register your HR firm” on the home page instead.");
+/** WorkConnect onboards a client organisation and invites its administrator. The client's data lives in its own isolated workspace. */
+export const POST = platformRoute(async (req, { admin }) => {
   const d = await body(req, schema);
-  if ((await rootDb.select({ id: users.id }).from(users).where(eq(users.email, d.email)).limit(1)).length) throw fail(409, "A user with this email already exists");
   let slug = slugify(d.orgName);
   if ((await rootDb.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, slug)).limit(1)).length) slug += "-" + Math.random().toString(36).slice(2, 6);
-  const [tenant] = await rootDb.insert(tenants).values({ name: d.orgName, slug }).returning();
-  const [owner] = await rootDb.insert(users).values({ authId: crypto.randomUUID(), email: d.email, phone: d.phone, passwordHash: await hashPassword(d.password), firstName: d.firstName, lastName: d.lastName }).returning();
-  await withTenant({ tenantId: tenant.id, userId: owner.id }, async (tx) => {
-    await tx.insert(memberships).values({ userId: owner.id, role: "admin" });
+  const [tenant] = await rootDb.insert(tenants).values({ name: d.orgName, slug, industry: d.industry || null }).returning();
+  const inv = await withTenant({ tenantId: tenant.id, userId: admin.userId }, async (tx) => {
     await tx.insert(categories).values(DEFAULT_CATEGORIES.map(([name, s, icon]) => ({ name, slug: s, icon })));
-    await tx.insert(servicePackages).values(DEFAULT_PACKAGES.map((p, i) => ({ ...p, features: [...p.features], sortOrder: i })));
+    return issueMemberInvite(tx, { tenant, email: d.adminEmail, firstName: d.adminFirstName, role: "admin", inviter: { id: admin.userId, name: admin.name } });
   });
-  return { id: tenant.id, slug };
+  await audit(admin, "client_created", { tenant, detail: `administrator invited: ${d.adminEmail}` });
+  if (!tenant) throw fail(500, "Could not create the client");
+  return { id: tenant.id, slug, inviteUrl: inv.url };
 });

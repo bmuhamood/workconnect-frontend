@@ -1,4 +1,4 @@
-export type Brand = { name: string; color: string };
+export type Brand = { name: string; color: string; client?: string };
 export type Rendered = { subject: string; html: string; text: string };
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
@@ -11,12 +11,18 @@ function layout(b: Brand, title: string, inner: string, o: { cta?: { label: stri
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#fff;border-radius:16px;overflow:hidden">
 <tr><td style="background:${esc(b.color)};color:#fff;padding:18px 28px;font-size:18px;font-weight:700">${esc(b.name)}</td></tr>
 <tr><td style="padding:28px"><h1 style="margin:0 0 16px;font-size:22px">${esc(title)}</h1>${inner}${cta}</td></tr>
-<tr><td style="padding:16px 28px;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5">${o.footer ?? `You received this email because you have an account with ${esc(b.name)}.`}</td></tr>
+<tr><td style="padding:16px 28px;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5">${o.footer ?? (b.client ? `Sent by ${esc(b.name)} on behalf of ${esc(b.client)}.` : `You received this email because you have an account with ${esc(b.name)}.`)}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 const strip = (t: string, cta?: { label: string; url: string }) => t + (cta ? `\n\n${cta.label}: ${cta.url}` : "");
 
 export const templates = {
+  invite(b: Brand, d: { name?: string; inviter: string; org?: string; role?: string; url: string; staff?: boolean; expiresDays: number }): Rendered {
+    const who = d.staff ? `join the ${b.name} team as a consultant` : `join ${d.org} on ${b.name} as ${d.role}`;
+    const body = `Hello${d.name ? " " + d.name : ""},\n\n${d.inviter} has invited you to ${who}.\n\nUse the button below to create your account. This invitation is personal to you and expires in ${d.expiresDays} days.`;
+    const cta = { label: "Accept invitation", url: d.url };
+    return { subject: d.staff ? `You're invited to join ${b.name}` : `${d.org} has invited you to ${b.name}`, html: layout(b, d.staff ? `Join ${b.name}` : `Join ${d.org}`, paragraphs(body), { cta, footer: `If you weren't expecting this, you can ignore this email. Nothing happens unless you accept.` }), text: strip(body, cta) };
+  },
   welcome(b: Brand, d: { name: string; role: string; url: string }): Rendered {
     const next = d.role === "worker" ? "Complete your profile so employers can find and trust you." : d.role === "employer" ? "Post your first job or browse verified workers." : "Invite your team and set up your workspace.";
     const body = `Hi ${d.name},\n\nWelcome to ${b.name}! ${next}`;

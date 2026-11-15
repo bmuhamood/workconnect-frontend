@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { MapPin, Clock } from "lucide-react";
 import { tdb } from "@/lib/tenant";
+import { requireSession } from "@/lib/session";
 import { jobs, categories } from "@/db/schema";
 import { SetupNotice } from "@/components/setup-notice";
 import { PageHeader, Empty, Badge } from "@/components/ui";
@@ -10,6 +11,7 @@ import { ugxRange, timeAgo } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Find jobs" };
 export default async function Jobs({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {
+  await requireSession();
   const { q, category } = await searchParams;
   let res;
   try { res = await tdb(async (tx) => {

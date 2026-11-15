@@ -1,23 +1,23 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { RegisterForm } from "@/components/auth-forms";
-import { AUTH_MODE } from "@/lib/auth-mode";
-import { getIdentity } from "@/lib/identity";
-import { getSession } from "@/lib/session";
-import { currentTenant } from "@/lib/tenant";
+import { getSession, getStaff } from "@/lib/session";
+import { LinkButton } from "@/components/ui";
 
-export const metadata: Metadata = { title: "Create your account" };
-export default async function Register({ searchParams }: { searchParams: Promise<{ finish?: string; as?: string }> }) {
+export const metadata: Metadata = { title: "Accounts are by invitation" };
+export default async function Register() {
   if (await getSession()) redirect("/dashboard");
-  const id = await getIdentity();
-  const tenant = await currentTenant();
-  const sp = await searchParams;
+  if (await getStaff()) redirect("/platform");
   return (
-    <div className="container-x grid place-items-center py-12">
+    <div className="container-x grid place-items-center py-16">
       <div className="card w-full max-w-xl p-8 animate-rise">
-        <h1 className="text-2xl font-bold tracking-tight">{id ? "Finish setting up" : sp.as === "organisation" ? "Register your HR firm" : "Create your account"}</h1>
-        <p className="mb-6 mt-1 text-sm text-slate-500">It takes about a minute. We'll email you a confirmation.</p>
-        <RegisterForm mode={AUTH_MODE} tenantName={tenant?.name ?? null} finish={!!id || sp.finish === "1"} identityEmail={id?.email} preselect={sp.as === "organisation" ? "agency" : undefined} />
+        <h1 className="text-2xl font-bold tracking-tight">Accounts are created by invitation</h1>
+        <p className="mt-3 leading-relaxed text-slate-600">WorkConnect sets up each client organisation, and your administrator invites you. Open the invitation link in your email to create your account.</p>
+        <ul className="mt-5 space-y-2 text-sm text-slate-700">
+          <li><b>Your organisation is new to WorkConnect?</b> <Link href="/contact?topic=consultation" className="text-accent underline">Book a consultation</Link> and we'll set up your private workspace.</li>
+          <li><b>Invitation expired or lost?</b> Ask your administrator to send a new one.</li>
+        </ul>
+        <div className="mt-7 flex flex-wrap gap-3"><LinkButton href="/login">Client login</LinkButton><LinkButton href="/contact?topic=consultation" variant="secondary">Book a consultation</LinkButton></div>
       </div>
     </div>
   );

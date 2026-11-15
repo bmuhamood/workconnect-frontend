@@ -8,9 +8,11 @@ export const PATCH = route<{ id: string }>({ roles: ["employer", "worker", "admi
   const { action, reason } = await body(req, z.object({ action: z.enum(["sign", "complete", "terminate"]), reason: z.string().trim().max(1000).optional() }));
   const [c] = await db.select().from(contracts).where(eq(contracts.id, params.id)).limit(1);
   if (!c || (s.role !== "admin" && c.employerId !== s.userId && c.workerId !== s.userId)) throw fail(404, "Contract not found");
-  // The consultancy admin acts on behalf of the client (employer side) for complete / terminate, but can't sign for anyone.
+  // The client's administrator acts for the client (complete / terminate). They may sign only contracts they are party to,
+  // and WorkConnect consultants never sign or end contracts in the client's name.
   const isAdmin = s.role === "admin";
-  if (isAdmin && action === "sign") throw fail(403, "Only the client and the employee can sign");
+  if (s.consultant) throw fail(403, "WorkConnect consultants can't sign or end contracts on behalf of a client");
+  if (isAdmin && action === "sign" && c.employerId !== s.userId) throw fail(403, "Only the contract's employer and the employee can sign");
   const isEmployer = c.employerId === s.userId || isAdmin;
   const other = isEmployer ? c.workerId : c.employerId;
   const link = `/contracts/${c.id}`;

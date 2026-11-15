@@ -16,8 +16,15 @@ export async function readUnsubscribeToken(token: string) {
 }
 
 export type TenantBrand = { id: string; name: string; brandColor: string; emailFromName?: string | null };
-export const brandOf = (t: TenantBrand): Brand => ({ name: t.name, color: t.brandColor });
+/** All email comes from WorkConnect. For a client workspace it says who it is on behalf of. */
+export const WORKCONNECT_COLOR = "#3042d6";
+export const brandOf = (t?: TenantBrand): Brand => ({ name: "WorkConnect", color: WORKCONNECT_COLOR, client: t?.name });
 export { templates };
+
+/** Queue a platform-level email (no client workspace), e.g. contact-form enquiries and staff invitations. */
+export async function queuePlatformEmail(to: { email: string; name?: string }, r: Rendered, template: string, opts: { replyTo?: string } = {}) {
+  await rootDb.insert(emailOutbox).values({ tenantId: null, toEmail: to.email, toName: to.name ?? null, replyTo: opts.replyTo ?? null, template, subject: r.subject, html: r.html, text: r.text });
+}
 
 /** Queue an email inside the current tenant transaction. Delivery happens after the response (see `flushOutbox`). */
 export async function queueEmail(tx: Tx, to: { email: string; name?: string }, r: Rendered, template: string, opts: { replyTo?: string } = {}) {
@@ -40,13 +47,14 @@ async function deliver(row: Row, from: string, headers?: Record<string, string>)
 /** Sends queued/failed emails (max 5 attempts). Runs after each request and from the cron. Uses the owner role on purpose. */
 export async function flushOutbox(limit = 25, tenantId?: string) {
   const rows = await rootDb.select({ r: emailOutbox, t: tenants }).from(emailOutbox)
-    .innerJoin(tenants, eq(tenants.id, emailOutbox.tenantId))
+    .leftJoin(tenants, eq(tenants.id, emailOutbox.tenantId))
     .where(and(inArray(emailOutbox.status, ["queued", "failed"]), lt(emailOutbox.attempts, 5), tenantId ? eq(emailOutbox.tenantId, tenantId) : undefined))
     .orderBy(emailOutbox.createdAt).limit(limit);
   let sent = 0;
   for (const { r, t } of rows) {
     const addr = process.env.EMAIL_FROM ?? "onboarding@resend.dev";
-    const from = `${t.emailFromName || t.name} <${addr.replace(/^.*<|>$/g, "")}>`;
+    const from = `WorkConnect <${addr.replace(/^.*<|>$/g, "")}>`;
+    void t;
     const unsub = r.template === "campaign" ? { "List-Unsubscribe": `<${appUrl()}/unsubscribe>` } : undefined;
     const out = await deliver(r, from, unsub).catch((e) => ({ ok: false, error: String(e) }) as { ok: boolean; id?: string; error?: string });
     await rootDb.update(emailOutbox).set(out.ok

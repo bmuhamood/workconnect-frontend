@@ -1,40 +1,29 @@
 # WorkConnect
 
-Multi-tenant hiring marketplace (Next.js 16 · Neon Postgres · Neon Auth · Drizzle · Resend). Deploys to Vercel.
+HR consultancy platform: **WorkConnect provides HR services to many client organisations, and each client's data is kept completely separate.** Next.js 16 · Neon Postgres · Neon Auth · Drizzle · Resend · Cloudinary. See `SYSTEM_DESIGN.md`.
 
 ## Roles
-Super WorkConnect Admin → HR consultancy owner/admin → client companies → employees. Full detail, overtime rules and test logins: **SYSTEM_DESIGN.md**.
-
-## Architecture
-- **Tenants**: every organisation (agency) is a `tenant`. Every business table has a `tenant_id` filled automatically from the request context.
-- **Isolation**: Postgres Row-Level Security (`FORCE`d) on all tenant tables. Each request runs in a transaction that does `SET LOCAL ROLE wc_app` (a role without BYPASSRLS) and sets `app.tenant_id`. Without a tenant context, queries return zero rows. `npm run test:isolation` proves it.
-- **Auth**: Neon Auth (Managed Better Auth). Without `NEON_AUTH_BASE_URL`, a local email/password fallback is used for development and is refused in production.
-- **Email**: transactional + marketing + follow-ups are queued in `email_outbox`, sent via Resend (retries up to 5×), with a daily Vercel Cron (`/api/cron/emails`) for reminders. Auth emails (verification/reset) are sent by Neon Auth.
-
-## HR Operations (`/hr`)
-Leave (entitlements, requests, approvals, balances, team calendar), attendance (self clock-in/out, lateness vs working hours, manager corrections), payroll (monthly runs, PAYE + NSSF + unpaid-leave deductions, allowances, approval, payslips, CSV), and an HR helpdesk. Settings live at `/hr/settings`.
-- **Payroll safety:** PAYE bands and NSSF rates are editable per organisation and an admin must confirm them before a run can be approved; changing a rate removes the confirmation. Defaults are a starting point only. Check them against URA/NSSF guidance.
-- `npm run test:hr` unit-tests the payroll maths against a published worked example.
-- Service packages are managed at `/admin/packages` and shown on `/packages` and the home page.
+Super Admin and consultants (WorkConnect staff) · Client administrator · Manager · Employee. There is no self-registration: WorkConnect adds a client, and invitations bring people in.
 
 ## Setup
 ```bash
 npm install
-neon login
-neon link --project-id <your-project-id> --branch production   # or neon init
-neon deploy                      # enables Postgres + Auth, writes .env.local
+neon login && neon link --project-id <id> --branch production && neon deploy   # Postgres + Neon Auth; writes .env.local
 echo "NEON_AUTH_COOKIE_SECRET=$(openssl rand -base64 32)" >> .env.local
-npm run db:migrate               # creates tables, RLS policies and the wc_app role
-npm run test:isolation           # must print "All isolation checks passed"
+echo "PLATFORM_SETUP_TOKEN=$(openssl rand -hex 24)" >> .env.local
+npm run db:migrate            # tables, row-level security, restricted role
+npm run test:isolation        # must end "All isolation checks passed"
 npm run build && npm start
 ```
-`npm run db:seed:reset` wipes the database and loads full demo data for two HR consultancies (see **SYSTEM_DESIGN.md** for every login). Demo users have no Neon Auth identity; set `ENABLE_DEMO_LOGIN=1` + `AUTH_SECRET` to let them sign in on a Neon-Auth deployment (testing only).
+Then open **`/setup`**, enter the setup token, and create the Super Admin. After that, sign in and use **Platform console → Add a client**.
 
-## Vercel
-1. Import the GitHub repo in Vercel (framework: Next.js).
-2. Set env vars from `.env.example` (DATABASE_URL, NEON_AUTH_BASE_URL, NEON_AUTH_COOKIE_SECRET, RESEND_API_KEY, EMAIL_FROM, NEXT_PUBLIC_APP_URL, CRON_SECRET).
-3. Run `npm run db:migrate` once against the production database.
-4. Add your Vercel URL to Neon Auth's trusted origins. Set `EMAIL_FROM` to an address on your Resend-verified domain (e.g. `notifications@listoq.com`), then sign in as an admin and use **Admin → Send a test email to me**.
+## Environment variables (Vercel)
+`DATABASE_URL`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, `PLATFORM_SETUP_TOKEN` (remove it after first use if you like), `NEXT_PUBLIC_APP_URL`, `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM` (an address on your Resend-verified domain), `CLOUDINARY_*`, and optionally `CONTACT_EMAIL`, `CONTACT_PHONE`, `CONTACT_ADDRESS` for the public Contact page. Add your site URL to Neon Auth's trusted origins. `/api/health` tells you what is missing, and whether your browser's session is recognised.
+
+## Local demo
+`npm run db:seed:reset` loads five client organisations plus WorkConnect staff (password `Password123!`, see `lib/demo-accounts.ts`). Local development uses a built-in login; production uses Neon Auth.
 
 ## Tests
-`scripts/test-isolation.mts` (DB-level) and `scripts/e2e.mjs` (HTTP workflow + cross-tenant attacks; needs a running server with local auth).
+- `npm run test:hr`: payroll maths against a published worked example
+- `npm run test:isolation`: database-level proof that clients can't see each other
+- `node scripts/e2e.mjs`: full workflow over HTTP (seed first; start the server with `PLATFORM_SETUP_TOKEN` and `ALLOW_LOCAL_AUTH=1`)

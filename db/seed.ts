@@ -52,7 +52,7 @@ type TenantDef = {
   owners: { key: string; first: string; last: string; email: string }[];
   clients: ClientDef[]; workers: WorkerDef[]; contracts: ContractDef[]; leave: LeaveDef[]; jobs: JobDef[]; chats: Chat[]; tickets: TicketDef[];
   payrollMonths: { period: string; status: "draft" | "approved" | "paid" }[];
-  overdueFor?: string; contacts: { name: string; email: string; topic: string; message: string; ago: number }[];
+  domain?: string; overdueFor?: string; contacts: { name: string; email: string; topic: string; message: string; ago: number }[];
 };
 
 const WORK_CONNECT: TenantDef = {
@@ -179,29 +179,51 @@ const GLOBIS: TenantDef = {
 type Row<T> = T extends { $inferInsert: infer I } ? I : never;
 type Ids = Record<string, string>;
 
-async function seedTenant(T: TenantDef, hash: string, auth: { n: number }) {
+/** One client organisation = one tenant. A former "client" of the consultancy becomes its own isolated workspace, together with the
+ *  employees, contracts, jobs and conversations that belong to it. WorkConnect's staff (def.owners) join as consultants. */
+const slugify = (x: string) => x.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+function splitByClient(def: TenantDef, domain: string): TenantDef[] {
+  const home = new Map<string, string>(); // worker key -> client key
+  for (const c of def.contracts) if (!home.has(c.worker)) home.set(c.worker, c.client);
+  for (const j of def.jobs) for (const a of j.apps ?? []) if (!home.has(a.w)) home.set(a.w, j.client);
+  for (const w of def.workers) if (!home.has(w.key)) home.set(w.key, def.clients[0].key);
+  return def.clients.map((c) => {
+    const mine = new Set([...home].filter(([, ck]) => ck === c.key).map(([w]) => w));
+    const people = new Set([c.key, ...mine, ...def.owners.map((o) => o.key)]);
+    return {
+      ...def, domain, name: c.company, slug: slugify(c.company), clients: [c],
+      workers: def.workers.filter((w) => mine.has(w.key)),
+      contracts: def.contracts.filter((ct) => ct.client === c.key),
+      leave: def.leave.filter((l) => mine.has(l.w)),
+      jobs: def.jobs.filter((j) => j.client === c.key).map((j) => ({ ...j, apps: j.apps?.filter((a) => mine.has(a.w)) })),
+      chats: def.chats.filter((ch) => people.has(ch.a) && people.has(ch.b)),
+      tickets: def.tickets.filter((t) => mine.has(t.by)),
+      overdueFor: def.overdueFor && mine.has(def.overdueFor) ? def.overdueFor : undefined,
+      contacts: [],
+    };
+  });
+}
+
+async function seedTenant(T: TenantDef, hash: string, auth: { n: number }, staff: Record<string, string>) {
+  const domain = T.domain!;
   const mkUser = async (email: string, first: string, last: string, createdDaysAgo = 200) => {
     const [u] = await db.insert(s.users).values({ authId: crypto.randomUUID(), email, phone: `+25670${String(1000000 + auth.n++)}`, passwordHash: hash, firstName: first, lastName: last, createdAt: ago(createdDaysAgo * 24) }).returning();
     return u;
   };
-  const [t] = await db.insert(s.tenants).values({ name: T.name, slug: T.slug, brandColor: T.color, contactEmail: T.contactEmail, contactPhone: T.contactPhone, contactAddress: T.contactAddress, emailFromName: T.name, payrollRatesConfirmedAt: T.confirmedRates ? ago(24 * 90) : null, createdAt: ago(24 * 260) }).returning();
+  const [t] = await db.insert(s.tenants).values({ name: T.name, slug: T.slug, brandColor: T.color, contactEmail: T.contactEmail, contactPhone: T.contactPhone, contactAddress: T.contactAddress, emailFromName: T.name, industry: T.clients[0].company.includes("Clinic") ? "Healthcare" : T.clients[0].company.includes("Logistics") ? "Logistics" : T.clients[0].company.includes("Household") ? "Household" : T.clients[0].company.includes("Guest") ? "Hospitality" : T.clients[0].company.includes("Produce") ? "Agriculture" : null, payrollRatesConfirmedAt: T.confirmedRates ? ago(24 * 90) : null, createdAt: ago(24 * 260) }).returning();
   const tid = t.id;
   const cfg = { bands: parseBands(t.payeBands), nssfEmployeeBps: t.nssfEmployeeBps, nssfEmployerBps: t.nssfEmployerBps, nssfCap: t.nssfCap };
 
   const cats = await db.insert(s.categories).values(DEFAULT_CATEGORIES.map(([name, slug, icon]) => ({ tenantId: tid, name, slug, icon }))).returning();
   const cat = (slug: string) => cats.find((c) => c.slug === slug)!.id;
-  await db.insert(s.servicePackages).values([
-    ...DEFAULT_PACKAGES.map((p, i) => ({ tenantId: tid, ...p, features: [...p.features], sortOrder: i })),
-    { tenantId: tid, name: "Temporary & Casual Staffing", tagline: "Short-term cover for peaks and events.", priceText: "From UGX 25,000 per person per day", billingNote: "Minimum order applies", features: ["Rapid shortlist within 48 hours", "Pre-screened casual pool", "Daily attendance reports"], highlighted: false, sortOrder: 3, active: false },
-  ]);
 
   // ---- people
   const U: Ids = {};
-  for (const o of T.owners) { const u = await mkUser(o.email, o.first, o.last, 250); U[o.key] = u.id; await db.insert(s.memberships).values({ tenantId: tid, userId: u.id, role: "admin" }); }
-  const domain = T.owners[0].email.split("@")[1];
+  // WorkConnect staff work inside every client workspace as consultants (visible to the client, recorded in the audit log).
+  for (const o of T.owners) { U[o.key] = staff[o.key]; await db.insert(s.memberships).values({ tenantId: tid, userId: staff[o.key], role: "admin", isConsultant: true }); }
   for (const c of T.clients) {
     const u = await mkUser(`${c.key}@${domain}`, c.first, c.last, 220); U[c.key] = u.id;
-    await db.insert(s.memberships).values({ tenantId: tid, userId: u.id, role: "employer" });
+    await db.insert(s.memberships).values({ tenantId: tid, userId: u.id, role: "admin" });
     await db.insert(s.employerProfiles).values({ tenantId: tid, userId: u.id, companyName: c.company, city: c.city, address: c.address });
   }
   for (const w of T.workers) {
@@ -341,7 +363,6 @@ async function seedTenant(T: TenantDef, hash: string, auth: { n: number }) {
   }
 
   // ---- contact-form inbox
-  for (const m of T.contacts) await db.insert(s.contactMessages).values({ tenantId: tid, name: m.name, email: m.email, topic: m.topic, message: m.message, createdAt: ago(m.ago) });
 
   // ---- notifications: every kind of event, mix of read/unread
   const N: Omit<Row<typeof s.notifications>, "tenantId">[] = [];
@@ -367,7 +388,6 @@ async function seedTenant(T: TenantDef, hash: string, auth: { n: number }) {
   for (const c of contracts) if (c.activated && c.def.status === "active") { note(c.employerId, `Invoice due: ${CUR}`, `Your invoice for ${CUR} is ready. Pay by ${CUR}-25 to avoid reminders.`, "/invoices", 24 * 10, false); }
   for (const k of T.tickets) { const req = U[k.by]; const last = k.thread[k.thread.length - 1]; if (k.status === "open") for (const o of T.owners) note(U[o.key], `New HR request: ${k.subject}`, `${k.category} request awaiting a reply.`, "/hr/support", last[2], false); else note(req, `HR request ${k.status === "resolved" ? "resolved" : "updated"}: ${k.subject}`, "Open the helpdesk to read the reply.", "/hr/support", last[2], true); }
   for (const j of T.jobs) for (const a of j.apps ?? []) { note(U[j.client], "New application", `${T.workers.find((x) => x.key === a.w)!.first} applied for ${j.title}.`, `/jobs/${jobIds[j.title]}`, j.ageDays * 24 - 20, a.status !== "pending"); if (a.status !== "pending" && a.status !== "withdrawn") note(U[a.w], `Application ${a.status}`, `Your application for ${j.title} was ${a.status}.`, "/dashboard", j.ageDays * 24 - 40, true); }
-  for (const m of T.contacts.slice(0, 2)) note(U.owner, "New enquiry", `${m.name}: ${m.topic}`, "/admin", m.ago, m.ago > 100);
   for (const ch of T.chats) if (ch.unread) { const last = ch.msgs[ch.msgs.length - 1]; const to = last[0] === ch.a ? ch.b : ch.a; note(U[to], "New message", last[1].slice(0, 80), "/messages", last[2], false); }
   for (const u of Object.values(U)) note(u, `Welcome to ${T.name}`, "Your account is ready. Complete your profile and explore your dashboard.", "/dashboard", 24 * 120, true);
   for (let i = 0; i < N.length; i += 200) await db.insert(s.notifications).values(N.slice(i, i + 200).map((n) => ({ ...n, tenantId: tid })));
@@ -380,9 +400,9 @@ async function seedTenant(T: TenantDef, hash: string, auth: { n: number }) {
     mails.push({ tenantId: tid, toEmail: to, toName: name, template, subject: r.subject, html: r.html, text: r.text, status, attempts: status === "failed" ? 5 : 1, error: status === "failed" ? "Seeded example: mailbox unavailable" : null, providerId: status === "sent" ? `seed_${mails.length}` : null, createdAt: ago(hoursAgo), sentAt: status === "sent" ? ago(hoursAgo - 0.05) : null });
   };
   for (const c of contracts) { const w = T.workers.find((x) => x.key === c.def.worker)!; if (c.activated) mail(`${c.def.worker}@${domain}`, w.first, "Contract active", `${c.def.title} is now active. Welcome aboard!`, "sent", c.def.startedAgo * 24, "notice"); }
-  mail(`worker7@${domain}`, "Lydia", "New contract offer", "You have a new contract offer. Review and sign it to get started.", domain === "workconnect.ug" ? "sent" : "skipped", 40);
-  mail(`client2@${domain}`, "Robert", "Invoice reminder", `Your invoice for ${M1} is overdue.`, "failed", 30, "followup");
-  mail(`owner@${domain}`, T.owners[0].first, "New HR request", "A new HR support request needs a reply.", "sent", 6);
+  if (T.workers.some((w) => w.key === "worker7")) mail(`worker7@${domain}`, "Lydia", "New contract offer", "You have a new contract offer. Review and sign it to get started.", domain === "workconnect.ug" ? "sent" : "skipped", 40);
+  if (T.clients[0].key === "client2" && domain === "workconnect.ug") mail(`client2@${domain}`, "Robert", "Invoice reminder", `Your invoice for ${M1} is overdue.`, "failed", 30, "followup");
+  if (T.tickets.length) mail(`owner@workconnect.ug`, T.owners[0].first, "New HR request", "A new HR support request needs a reply.", "sent", 6);
   if (mails.length) await db.insert(s.emailOutbox).values(mails);
 
   // ---- follow-ups already sent (so the daily cron doesn't resend them)
@@ -397,22 +417,42 @@ async function main() {
   const reset = process.argv.includes("--reset");
   if ((await db.select({ id: s.tenants.id }).from(s.tenants).limit(1)).length || (await db.select({ id: s.users.id }).from(s.users).limit(1)).length) {
     if (!reset) { console.log("The database already has data. Run `npm run db:seed:reset` to wipe it and load the demo data."); return; }
-    await db.execute(sql`TRUNCATE TABLE tenants, users RESTART IDENTITY CASCADE`);
+    await db.execute(sql`TRUNCATE TABLE tenants, users, platform_packages, platform_leads, audit_log RESTART IDENTITY CASCADE`);
     console.log("Existing data wiped.");
   }
   const hash = await bcrypt.hash(DEMO_PASSWORD, 10);
   const auth = { n: 0 };
-  // Platform owner (not tied to any organisation)
-  await db.insert(s.users).values({ authId: crypto.randomUUID(), email: "superadmin@workconnect.ug", phone: "+256700000001", passwordHash: hash, firstName: "Super", lastName: "Admin", isSuperAdmin: true, createdAt: ago(24 * 300) });
+  // WorkConnect staff (not tied to any client): the Super Admin and two consultants.
+  const mk = async (email: string, first: string, last: string, extra: Partial<typeof s.users.$inferInsert>, days: number) => (await db.insert(s.users).values({ authId: crypto.randomUUID(), email, phone: `+25670${String(9000000 + auth.n++)}`, passwordHash: hash, firstName: first, lastName: last, createdAt: ago(24 * days), ...extra }).returning())[0];
+  const superAdmin = await mk("superadmin@workconnect.ug", "Super", "Admin", { isSuperAdmin: true }, 300);
+  const staff: Record<string, string> = {};
+  for (const o of WORK_CONNECT.owners) staff[o.key] = (await mk(o.email, o.first, o.last, { isConsultant: true }, 250)).id;
+
+  // WorkConnect's own packages and public enquiries
+  await db.insert(s.platformPackages).values([
+    ...DEFAULT_PACKAGES.map((p, i) => ({ ...p, features: [...p.features], sortOrder: i })),
+    { name: "Temporary & Casual Staffing", tagline: "Short-term cover for peaks and events.", priceText: "From UGX 25,000 per person per day", billingNote: "Minimum order applies", features: ["Rapid shortlist within 48 hours", "Pre-screened casual pool", "Daily attendance reports"], highlighted: false, sortOrder: 3, active: false },
+  ]);
+  for (const m of WORK_CONNECT.contacts) await db.insert(s.platformLeads).values({ name: m.name, email: m.email, topic: m.topic, message: m.message, createdAt: ago(m.ago), status: m.ago > 100 ? "contacted" : "new" });
+
+  // Client organisations: every former client becomes its own tenant. (Two were introduced through a referral partner.)
+  const partner = JSON.parse(JSON.stringify({ ...GLOBIS, owners: WORK_CONNECT.owners }).replace(/GLOBIS HR Solutions/g, "WorkConnect")) as TenantDef;
+  const clients = [...splitByClient(WORK_CONNECT, "workconnect.ug"), ...splitByClient(partner, "globis.ug")];
   const results = [];
-  for (const T of [WORK_CONNECT, GLOBIS]) results.push(await seedTenant(T, hash, auth));
+  for (const T of clients) results.push(await seedTenant(T, hash, auth, staff));
+  for (const r of results) {
+    await db.insert(s.auditLog).values([
+      { actorId: superAdmin.id, actorName: "Super Admin", tenantId: r.tenant.id, tenantName: r.tenant.name, action: "client_created", detail: "administrator invited", createdAt: ago(24 * 200) },
+      { actorId: staff.hr, actorName: "Rebecca Auma", tenantId: r.tenant.id, tenantName: r.tenant.name, action: "entered_workspace", createdAt: ago(26) },
+    ]);
+  }
 
   // Every advertised demo login must exist.
   const emails = new Set((await db.select({ e: s.users.email }).from(s.users)).map((r) => r.e));
   const missing = DEMO_ACCOUNTS.filter((a) => !emails.has(a.email));
   if (missing.length) throw new Error("Demo accounts missing from seed: " + missing.map((m) => m.email).join(", "));
 
-  console.log(`\nSeeded ${results.length} HR consultancies + the platform admin (today = ${today}, ${TZ}).`);
+  console.log(`\nSeeded ${results.length} client organisations + WorkConnect staff (today = ${today}, ${TZ}).`);
   for (const r of results) console.log(`  • ${r.tenant.name}: ${r.users} users, ${r.contracts} contracts, ${r.attendance} attendance days, ${r.notes} notifications`);
   console.log(`\nPassword for every account: ${DEMO_PASSWORD}\n`);
   for (const a of DEMO_ACCOUNTS) console.log(`  ${a.email.padEnd(30)} ${a.label}`);
