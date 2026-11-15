@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { rootDb } from "@/lib/db";
 import { AUTH_MODE, isProd } from "@/lib/auth-mode";
 import { cloudinaryConfig } from "@/lib/cloudinary";
+import { getIdentity } from "@/lib/identity";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,10 @@ export async function GET() {
       }
     } catch { database = "unreachable"; }
   }
+  // Is THIS browser's session recognised? Open /api/health while signed in. "signed_out" right after signing in means the session cookie is not being kept or renewed.
+  let session: "signed_in" | "signed_out" | "error" = "signed_out";
+  try { session = (await getIdentity()) ? "signed_in" : "signed_out"; } catch { session = "error"; }
   const authReady = AUTH_MODE === "neon" ? env.NEON_AUTH_COOKIE_SECRET_32_chars : !isProd;
   const ok = database === "ok" && authReady;
-  return NextResponse.json({ ok, authMode: AUTH_MODE, authReady, database, tenants, env }, { status: ok ? 200 : 503 });
+  return NextResponse.json({ ok, authMode: AUTH_MODE, authReady, session, database, tenants, env }, { status: ok ? 200 : 503 });
 }

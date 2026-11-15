@@ -9,7 +9,7 @@ import { call } from "@/lib/client";
 import { btn } from "@/components/ui";
 import { Field } from "@/components/ajax-form";
 
-export function LoginForm({ mode, demo = false, showDemo = false }: { mode: Mode; demo?: boolean; showDemo?: boolean }) {
+export function LoginForm({ mode, demo = false, showDemo = false, next }: { mode: Mode; demo?: boolean; showDemo?: boolean; next?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -17,7 +17,7 @@ export function LoginForm({ mode, demo = false, showDemo = false }: { mode: Mode
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     setBusy(true); setError("");
-    try { await signIn(mode, String(f.get("email")).trim().toLowerCase(), String(f.get("password")), demo); router.push("/dashboard"); router.refresh(); }
+    try { await signIn(mode, String(f.get("email")).trim().toLowerCase(), String(f.get("password")), demo); router.push(next && /^\/invite\/[\w-]+$/.test(next) ? next : "/dashboard"); router.refresh(); }
     catch (err) { setError((err as Error).message); setBusy(false); }
   }
   return (
@@ -26,7 +26,7 @@ export function LoginForm({ mode, demo = false, showDemo = false }: { mode: Mode
       <Field label="Password"><input id="login-password" name="password" type="password" required autoComplete="current-password" className="input" /></Field>
       {error && <p role="alert" className="rounded-lg border border-rose-600/40 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</p>}
       <button disabled={busy} className={btn("primary", "lg") + " w-full"}>{busy && <Loader2 className="size-4 animate-spin" />}Sign in</button>
-      <p className="text-center text-sm text-slate-600">New here? <Link href="/register" className="font-medium text-accent underline">Create an account</Link> · Run an HR firm? <Link href="/register?as=organisation" className="font-medium text-accent underline">Register it</Link></p>
+      <p className="text-center text-sm text-slate-600">Accounts are created by invitation. Need access for your organisation? <Link href="/contact?topic=consultation" className="font-medium text-accent underline">Talk to WorkConnect</Link></p>
       {showDemo && <DemoAccounts />}
     </form>
   );
@@ -53,16 +53,48 @@ function DemoAccounts() {
   );
 }
 
-type Role = "worker" | "employer" | "agency";
-const ROLES: { id: Role; title: string; hint: string }[] = [
-  { id: "worker", title: "I'm looking for work", hint: "Create a profile and apply to jobs" },
-  { id: "employer", title: "I want to hire", hint: "Post jobs and hire verified workers" },
-  { id: "agency", title: "I run an HR firm", hint: "Create your organisation as its owner" },
-];
+const field = (label: string, el: React.ReactNode) => <Field label={label}>{el}</Field>;
+type InviteProps = { mode: Mode; token: string; email: string; firstName?: string; roleLabel: string; role: string; org?: string; staff: boolean; finish: boolean };
 
-export function RegisterForm({ mode, tenantName, finish, identityEmail, preselect }: { mode: Mode; tenantName: string | null; finish: boolean; identityEmail?: string; preselect?: "agency" }) {
+/** Completes an invitation. The email is fixed to the address the invitation was sent to. */
+export function InviteForm({ mode, token, email, firstName, roleLabel, role, org, staff, finish }: InviteProps) {
   const router = useRouter();
-  const [role, setRole] = useState<Role>(preselect === "agency" || !tenantName ? "agency" : "worker");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
+    setBusy(true); setError("");
+    try {
+      if (!finish) await signUp(mode, { email, password: f.password, firstName: f.firstName, lastName: f.lastName, phone: f.phone });
+      await call("/api/onboarding", "POST", { token, firstName: f.firstName, lastName: f.lastName, phone: f.phone, city: f.city || undefined, profession: f.profession || undefined, companyName: f.companyName || undefined });
+      router.push(staff ? "/platform" : "/dashboard"); router.refresh();
+    } catch (err) { setError((err as Error).message); setBusy(false); }
+  }
+  return (
+    <form onSubmit={submit} className="space-y-5">
+      <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm font-medium text-accent">{staff ? <>You're joining the <b>WorkConnect</b> team as a consultant.</> : <>You're joining <b>{org}</b> as <b>{roleLabel.toLowerCase()}</b>.</>}</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {field("First name", <input name="firstName" required defaultValue={firstName} autoComplete="given-name" className="input" />)}
+        {field("Last name", <input name="lastName" required autoComplete="family-name" className="input" />)}
+      </div>
+      {field("Email", <input value={email} readOnly aria-readonly="true" className="input opacity-80" />)}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {field("Phone", <input name="phone" type="tel" required autoComplete="tel" className="input" placeholder="+256700123456" />)}
+        {!staff && field("City", <input name="city" defaultValue="Kampala" className="input" />)}
+      </div>
+      {!staff && role === "worker" && field("Your job title", <input name="profession" required className="input" placeholder="e.g. Driver, Cook, Accountant" />)}
+      {!finish && field("Choose a password", <input name="password" type="password" minLength={8} required autoComplete="new-password" className="input" />)}
+      {error && <p role="alert" className="rounded-lg border border-rose-600/40 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</p>}
+      <button disabled={busy} className={btn("primary", "lg") + " w-full"}>{busy && <Loader2 className="size-4 animate-spin" />}{finish ? "Accept invitation" : "Create account and join"}</button>
+      {!finish && <p className="text-center text-sm text-slate-600">Already have an account? <Link href={`/login?next=/invite/${token}`} className="font-medium text-accent underline">Sign in to accept</Link></p>}
+    </form>
+  );
+}
+
+/** One-time creation of the first Super WorkConnect Admin. */
+export function SetupForm({ mode, finish, email }: { mode: Mode; finish: boolean; email?: string }) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -71,39 +103,19 @@ export function RegisterForm({ mode, tenantName, finish, identityEmail, preselec
     setBusy(true); setError("");
     try {
       if (!finish) await signUp(mode, { email: f.email.trim().toLowerCase(), password: f.password, firstName: f.firstName, lastName: f.lastName, phone: f.phone });
-      await call("/api/onboarding", "POST", { role, firstName: f.firstName, lastName: f.lastName, phone: f.phone, city: f.city || "Kampala", profession: f.profession, companyName: f.companyName, agencyName: f.agencyName });
-      router.push("/dashboard"); router.refresh();
+      await call("/api/setup", "POST", { token: f.token, firstName: f.firstName, lastName: f.lastName, phone: f.phone });
+      router.push("/platform"); router.refresh();
     } catch (err) { setError((err as Error).message); setBusy(false); }
   }
-  const roles = ROLES;
   return (
-    <form onSubmit={submit} className="space-y-5">
-      {tenantName && role !== "agency" && <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm font-medium text-accent">Joining <b>{tenantName}</b></p>}
-      {role === "agency" && <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm text-accent">You will become the <b>owner</b> of a new, private HR organisation. You can then onboard client companies and their employees.</p>}
-      <div className="grid gap-2 sm:grid-cols-3">
-        {roles.map((r) => (
-          <button type="button" key={r.id} aria-pressed={role === r.id} disabled={!tenantName && r.id !== "agency"} onClick={() => setRole(r.id)} className={`rounded-xl border-2 p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${role === r.id ? "border-brand-500 bg-brand-50" : "border-slate-300 bg-white hover:border-brand-400"}`}>
-            <div className="text-sm font-semibold">{r.title}</div><div className="mt-0.5 text-xs text-slate-600">{r.hint}</div>
-          </button>
-        ))}
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="First name"><input name="firstName" required className="input" autoComplete="given-name" /></Field>
-        <Field label="Last name"><input name="lastName" required className="input" autoComplete="family-name" /></Field>
-      </div>
-      {!finish && <Field label="Email"><input name="email" type="email" required className="input" autoComplete="email" /></Field>}
-      {finish && <p className="text-sm text-slate-500">Signed in as <b>{identityEmail}</b>. Finish setting up your account.</p>}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Phone" hint="e.g. +256700123456"><input name="phone" type="tel" required className="input" autoComplete="tel" /></Field>
-        <Field label="City"><input name="city" defaultValue="Kampala" required className="input" /></Field>
-      </div>
-      {role === "worker" && <Field label="Your profession"><input name="profession" required className="input" placeholder="e.g. Nanny, Driver, Cook" /></Field>}
-      {role === "employer" && <Field label="Company or household name (optional)"><input name="companyName" className="input" /></Field>}
-      {role === "agency" && <Field label="Organisation name"><input name="agencyName" required className="input" placeholder="e.g. Kampala Homes" /></Field>}
-      {!finish && <Field label="Password" hint="At least 8 characters"><input name="password" type="password" minLength={8} required className="input" autoComplete="new-password" /></Field>}
+    <form onSubmit={submit} className="space-y-4">
+      {field("Setup token", <input name="token" type="password" required autoComplete="off" className="input" />)}
+      <div className="grid gap-4 sm:grid-cols-2">{field("First name", <input name="firstName" required className="input" />)}{field("Last name", <input name="lastName" required className="input" />)}</div>
+      {finish ? <p className="text-sm text-slate-600">Signed in as <b>{email}</b>.</p> : field("Email", <input name="email" type="email" required className="input" />)}
+      {field("Phone", <input name="phone" type="tel" required className="input" />)}
+      {!finish && field("Password", <input name="password" type="password" minLength={8} required autoComplete="new-password" className="input" />)}
       {error && <p role="alert" className="rounded-lg border border-rose-600/40 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">{error}</p>}
-      <button disabled={busy} className={btn("primary", "lg") + " w-full"}>{busy && <Loader2 className="size-4 animate-spin" />}{finish ? "Finish setup" : "Create account"}</button>
-      {!finish && <p className="text-center text-sm text-slate-500">Already registered? <Link href="/login" className="font-medium text-accent hover:underline">Sign in</Link></p>}
+      <button disabled={busy} className={btn("primary", "lg") + " w-full"}>{busy && <Loader2 className="size-4 animate-spin" />}Create Super Admin</button>
     </form>
   );
 }

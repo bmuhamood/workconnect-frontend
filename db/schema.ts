@@ -38,6 +38,7 @@ export const tenants = pgTable("tenants", {
   payrollRatesConfirmedAt: timestamp("payroll_rates_confirmed_at", { withTimezone: true }),
   /** Set by the platform admin to lock an organisation out (e.g. unpaid subscription). */
   suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+  industry: text("industry"),
   createdAt: ts("created_at"),
 }, (t) => [uniqueIndex("tenants_slug_uq").on(t.slug), uniqueIndex("tenants_domain_uq").on(t.domain)]);
 
@@ -54,6 +55,8 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").default(true).notNull(),
   /** Platform-level "Super WorkConnect Admin". Not tied to any tenant; sees every HR consultancy. */
   isSuperAdmin: boolean("is_super_admin").default(false).notNull(),
+  /** WorkConnect consultant: can open client workspaces to deliver the service (every entry is audited). */
+  isConsultant: boolean("is_consultant").default(false).notNull(),
   createdAt: ts("created_at"),
 }, (t) => [uniqueIndex("users_email_uq").on(t.email), uniqueIndex("users_auth_uq").on(t.authId)]);
 
@@ -62,6 +65,8 @@ export const memberships = pgTable("memberships", {
   tenantId: tenantCol(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: roleEnum("role").notNull(),
+  /** True for WorkConnect staff working inside this client's workspace. Visible to the client; only the platform can remove it. */
+  isConsultant: boolean("is_consultant").notNull().default(false),
   marketingOptIn: boolean("marketing_opt_in").notNull().default(true),
   createdAt: ts("created_at"),
 }, (t) => [uniqueIndex("mem_tenant_user_uq").on(t.tenantId, t.userId), index("mem_user_idx").on(t.userId)]);
@@ -221,7 +226,7 @@ export const notifications = pgTable("notifications", {
 
 export const emailOutbox = pgTable("email_outbox", {
   id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: tenantCol(),
+  tenantId: uuid("tenant_id").default(sql`nullif(current_setting('app.tenant_id', true), '')::uuid`).references(() => tenants.id, { onDelete: "cascade" }), // null = platform email
   toEmail: text("to_email").notNull(),
   toName: text("to_name"),
   replyTo: text("reply_to"),
@@ -352,6 +357,61 @@ export const ticketMessages = pgTable("ticket_messages", {
   createdAt: ts("created_at"),
 }, (t) => [index("tmsg_ticket_idx").on(t.ticketId, t.createdAt)]);
 
+/** Invitation to join a client workspace (kind "member") or to become WorkConnect staff (kind "staff", no tenant). Only a hash of the token is stored. */
+export const invitations = pgTable("invitations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").default(sql`nullif(current_setting('app.tenant_id', true), '')::uuid`).references(() => tenants.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull().default("member"), // member | staff
+  email: text("email").notNull(),
+  firstName: text("first_name"),
+  role: text("role"), // admin | employer | worker (member invites)
+  tokenHash: text("token_hash").notNull(),
+  invitedBy: uuid("invited_by"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: ts("created_at"),
+}, (t) => [uniqueIndex("inv_token_uq").on(t.tokenHash), index("inv_tenant_idx").on(t.tenantId, t.createdAt), index("inv_email_idx").on(t.email)]);
+
+/** WorkConnect's own service packages (the public Packages page). Not tenant data. */
+export const platformPackages = pgTable("platform_packages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  tagline: text("tagline").notNull().default(""),
+  priceText: text("price_text").notNull().default("Custom quote"),
+  billingNote: text("billing_note").notNull().default(""),
+  features: text("features").array().notNull().default([]),
+  highlighted: boolean("highlighted").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdAt: ts("created_at"),
+});
+
+/** Enquiries from the public contact form. Belong to WorkConnect, not to any client. */
+export const platformLeads = pgTable("platform_leads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  company: text("company"),
+  phone: text("phone"),
+  topic: text("topic").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("new"), // new | contacted | closed
+  createdAt: ts("created_at"),
+}, (t) => [index("lead_email_idx").on(t.email, t.createdAt), index("lead_status_idx").on(t.status, t.createdAt)]);
+
+/** Append-only record of platform actions (adding clients, entering workspaces, staff changes). */
+export const auditLog = pgTable("audit_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  actorId: uuid("actor_id"),
+  actorName: text("actor_name").notNull(),
+  tenantId: uuid("tenant_id"),
+  tenantName: text("tenant_name"),
+  action: text("action").notNull(),
+  detail: text("detail"),
+  createdAt: ts("created_at"),
+}, (t) => [index("audit_idx").on(t.createdAt), index("audit_tenant_idx").on(t.tenantId, t.createdAt)]);
+
 /** Dedupes automated follow-ups so a reminder is only sent once per entity/kind. */
 export const followups = pgTable("followups", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -363,5 +423,5 @@ export const followups = pgTable("followups", {
 
 export const TENANT_TABLES = [
   "memberships", "worker_profiles", "employer_profiles", "categories", "jobs", "applications", "contracts",
-  "invoices", "conversations", "messages", "reviews", "notifications", "email_outbox", "followups", "contact_messages", "service_packages", "leave_requests", "attendance_records", "payroll_runs", "payroll_lines", "support_tickets", "ticket_messages",
+  "invoices", "conversations", "messages", "reviews", "notifications", "email_outbox", "followups", "invitations", "contact_messages", "service_packages", "leave_requests", "attendance_records", "payroll_runs", "payroll_lines", "support_tickets", "ticket_messages",
 ] as const;

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { and, desc, eq, ilike, or, lte } from "drizzle-orm";
 import { ShieldCheck, MapPin } from "lucide-react";
 import { tdb } from "@/lib/tenant";
+import { requireSession } from "@/lib/session";
 import { workerProfiles, users, categories } from "@/db/schema";
 import { SetupNotice } from "@/components/setup-notice";
 import { PageHeader, Empty, Avatar, Stars, Badge } from "@/components/ui";
@@ -11,6 +12,7 @@ import { ugx, rating } from "@/lib/format";
 export const metadata: Metadata = { title: "Find workers" };
 type SP = { q?: string; category?: string; city?: string; verified?: string; max?: string };
 export default async function Workers({ searchParams }: { searchParams: Promise<SP> }) {
+  await requireSession(["admin", "employer"]);
   const sp = await searchParams;
   let res;
   try { res = await tdb(async (tx) => {

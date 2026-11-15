@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Check } from "lucide-react";
-import type { PublicPackage } from "@/lib/packages";
+import type { PublicPackage } from "@/lib/platform";
 import { cn } from "@/components/ui";
 
 export function PackagesGrid({ packages }: { packages: PublicPackage[] }) {

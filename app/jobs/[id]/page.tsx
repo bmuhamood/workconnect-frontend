@@ -3,7 +3,7 @@ import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { MapPin, CalendarClock } from "lucide-react";
 import { tdb } from "@/lib/tenant";
-import { getSession } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 import { jobs, applications, users, workerProfiles, categories } from "@/db/schema";
 import { Badge, StatusBadge, Avatar, LinkButton } from "@/components/ui";
 import { AjaxForm, Field } from "@/components/ajax-form";
@@ -13,7 +13,7 @@ import { ugx, ugxRange, timeAgo } from "@/lib/format";
 export default async function JobPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const s = await getSession();
+  const s = await requireSession();
   const data = await tdb(async (tx) => {
     const [row] = await tx.select({ j: jobs, cat: categories.name }).from(jobs).leftJoin(categories, eq(categories.id, jobs.categoryId)).where(eq(jobs.id, id)).limit(1);
     if (!row) return null;

@@ -43,6 +43,13 @@
       "when": 1794400000000,
       "tag": "0005_schedules_overtime_platform",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794511151073,
+      "tag": "0006_clients_platform",
+      "breakpoints": true
     }
   ]
 }

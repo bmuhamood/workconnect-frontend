@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { getSession, getPlatformAdmin, type Session, type PlatformAdmin } from "@/lib/session";
+import { getSession, getPlatformAdmin, getStaff, type Session, type PlatformAdmin, type Staff } from "@/lib/session";
 import { withTenant, type Tx } from "@/lib/db";
 
 export class ApiError extends Error {
@@ -46,6 +46,19 @@ export function platformRoute<P = Record<string, string>>(fn: (req: Request, ctx
     } catch (e) {
       return errorResponse(e);
     }
+  };
+}
+
+/** Routes for any WorkConnect staff member (Super Admin or consultant). */
+export function staffRoute<P = Record<string, string>>(fn: (req: Request, ctx: { params: P; staff: Staff }) => Promise<unknown>) {
+  return async (req: Request, ctx: Ctx<P>) => {
+    try {
+      const staff = await getStaff();
+      if (!staff) throw fail(403, "WorkConnect staff only");
+      const params = (await ctx?.params) as P;
+      const out = await fn(req, { params, staff });
+      return out instanceof Response ? out : NextResponse.json(out ?? { ok: true });
+    } catch (e) { return errorResponse(e); }
   };
 }
 

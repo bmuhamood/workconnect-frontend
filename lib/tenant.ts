@@ -1,41 +1,27 @@
 import "server-only";
 import { cache } from "react";
-import { cookies, headers } from "next/headers";
 import { eq } from "drizzle-orm";
 import { rootDb, withTenant, type Tx } from "@/lib/db";
 import { tenants } from "@/db/schema";
-import { getSession, TENANT_COOKIE } from "@/lib/session";
+import { getSession } from "@/lib/session";
 
 export type Tenant = typeof tenants.$inferSelect;
 
-/**
- * Which tenant is this visitor looking at?
- * signed in -> their active tenant; else custom domain -> ?t= cookie -> DEFAULT_TENANT_SLUG.
- */
+/** The client workspace the signed-in user is in. There is no "default" or public tenant: the public site belongs to WorkConnect. */
 export const currentTenant = cache(async (): Promise<Tenant | null> => {
-  try { return await resolveTenant(); } catch (e) {
+  try {
+    const s = await getSession();
+    return s ? (await rootDb.select().from(tenants).where(eq(tenants.id, s.tenantId)).limit(1))[0] ?? null : null;
+  } catch (e) {
     console.error("[tenant] could not resolve tenant (is the database migrated? see /api/health):", (e as Error).message.slice(0, 160));
     return null;
   }
 });
 
-async function resolveTenant(): Promise<Tenant | null> {
-  const s = await getSession();
-  if (s) return (await rootDb.select().from(tenants).where(eq(tenants.id, s.tenantId)).limit(1))[0] ?? null;
-  const host = ((await headers()).get("host") ?? "").split(":")[0].toLowerCase();
-  if (host) {
-    const [byDomain] = await rootDb.select().from(tenants).where(eq(tenants.domain, host)).limit(1);
-    if (byDomain) return byDomain;
-  }
-  const slug = (await cookies()).get(TENANT_COOKIE)?.value ?? process.env.DEFAULT_TENANT_SLUG;
-  if (!slug) return (await rootDb.select().from(tenants).limit(1))[0] ?? null;
-  return (await rootDb.select().from(tenants).where(eq(tenants.slug, slug)).limit(1))[0] ?? null;
-}
-
-/** Tenant-scoped DB access for server components (works signed out for public marketplace pages). */
+/** Tenant-scoped DB access for server components. Requires a signed-in user in a client workspace. */
 export async function tdb<T>(fn: (tx: Tx, tenant: Tenant) => Promise<T>): Promise<T> {
   const t = await currentTenant();
-  if (!t) throw new Error("No tenant configured. Run `npm run db:seed` or create a tenant.");
   const s = await getSession();
-  return withTenant({ tenantId: t.id, userId: s?.userId }, (tx) => fn(tx, t));
+  if (!t || !s) throw new Error("Not signed in to a client workspace.");
+  return withTenant({ tenantId: t.id, userId: s.userId }, (tx) => fn(tx, t));
 }

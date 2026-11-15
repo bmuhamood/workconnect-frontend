@@ -8,10 +8,11 @@ import { queueEmail, templates, brandOf, flushOutbox } from "@/lib/email";
 import { ugx } from "@/lib/format";
 
 // Records a payment. Plug a real provider (MTN MoMo / Airtel Money / Flutterwave) in here before taking live money.
-export const POST = route<{ id: string }>({ roles: ["employer"] }, async (req, { params, session, db }) => {
+export const POST = route<{ id: string }>({ roles: ["employer", "admin"] }, async (req, { params, session, db }) => {
+  if (session.consultant) throw fail(403, "Only the client can pay its invoices");
   const { method } = await body(req, z.object({ method: z.enum(["mtn_momo", "airtel_money", "card", "bank"]) }));
   const [inv] = await db.update(invoices).set({ status: "paid", paidAt: new Date(), paymentMethod: method })
-    .where(and(eq(invoices.id, params.id), eq(invoices.employerId, session.userId), eq(invoices.status, "pending"))).returning();
+    .where(and(eq(invoices.id, params.id), session.role === "admin" ? undefined : eq(invoices.employerId, session.userId), eq(invoices.status, "pending"))).returning();
   if (!inv) throw fail(409, "Invoice not found or already paid");
   const [u] = await db.select({ email: users.email, first: users.firstName }).from(users).where(eq(users.id, session.userId)).limit(1);
   const [t] = await db.select().from(tenants).limit(1);

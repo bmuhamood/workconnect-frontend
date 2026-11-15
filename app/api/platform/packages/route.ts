@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { servicePackages } from "@/db/schema";
-import { route, body } from "@/lib/http";
+import { rootDb } from "@/lib/db";
+import { platformPackages } from "@/db/schema";
+import { platformRoute, body } from "@/lib/http";
 
 export const packageSchema = z.object({
   name: z.string().trim().min(2, "Enter a package name").max(80),
@@ -11,9 +12,8 @@ export const packageSchema = z.object({
   highlighted: z.union([z.literal("on"), z.boolean()]).optional().transform((v) => v === "on" || v === true),
   sortOrder: z.coerce.number().int().min(0).max(99).optional(),
 });
-
-export const POST = route({ roles: ["admin"] }, async (req, { db }) => {
+export const POST = platformRoute(async (req) => {
   const d = await body(req, packageSchema);
-  const [p] = await db.insert(servicePackages).values({ name: d.name, tagline: d.tagline ?? "", priceText: d.priceText, billingNote: d.billingNote ?? "", features: d.features, highlighted: d.highlighted, sortOrder: d.sortOrder ?? 0 }).returning({ id: servicePackages.id });
+  const [p] = await rootDb.insert(platformPackages).values({ name: d.name, tagline: d.tagline ?? "", priceText: d.priceText, billingNote: d.billingNote ?? "", features: d.features, highlighted: d.highlighted, sortOrder: d.sortOrder ?? 0 }).returning({ id: platformPackages.id });
   return { id: p.id };
 });

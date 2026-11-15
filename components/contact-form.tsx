@@ -30,6 +30,7 @@ export function ContactForm({ topics, defaults }: { topics: readonly string[]; d
         <Field label="Your name"><input name="name" required defaultValue={defaults?.name} autoComplete="name" className="input" /></Field>
         <Field label="Email"><input name="email" type="email" required defaultValue={defaults?.email} autoComplete="email" className="input" /></Field>
       </div>
+      <div className="grid gap-4 sm:grid-cols-2"><Field label="Company or organisation (optional)"><input name="company" autoComplete="organization" className="input" /></Field><Field label="Phone (optional)"><input name="phone" type="tel" autoComplete="tel" className="input" /></Field></div>
       <Field label="What's it about?"><select name="topic" required defaultValue={defaults?.topic ?? ""} className="input"><option value="" disabled>Choose a topic</option>{topics.map((t) => <option key={t}>{t}</option>)}</select></Field>
       <Field label="Message"><textarea name="message" required rows={6} maxLength={4000} defaultValue={defaults?.message} className="input" placeholder="Tell us what you need and we'll get back to you." /></Field>
       <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden"><label>Website<input name="website" tabIndex={-1} autoComplete="off" /></label></div>
